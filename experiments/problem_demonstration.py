@@ -54,10 +54,57 @@ class ProblemDemonstrator:
         print("PROBLEM 1: Poor Cache Locality")
         print("="*60)
         
-        # Create datasets
-        positive_set = [f"positive_{i}" for i in range(n_items)]
-        negative_set = [f"negative_{i}" for i in range(n_items * 5)]
-        query_set = [f"query_{i}" for i in range(n_queries)]
+        # Load real-world URL dataset
+        print("\nLoading real-world URL dataset...")
+        dataset_path = "data/datasets/url_blacklist"
+        
+        positive_set = []
+        negative_set = []
+        query_set = []
+        
+        # Try to load malicious URLs as positive set
+        malicious_file = f"{dataset_path}/malicious_urls.txt"
+        benign_file = f"{dataset_path}/benign_urls.txt"
+        
+        if os.path.exists(malicious_file) and os.path.exists(benign_file):
+            with open(malicious_file, 'r') as f:
+                all_malicious = [line.strip() for line in f.readlines() if line.strip()]
+                positive_set = all_malicious[:n_items]
+            
+            with open(benign_file, 'r') as f:
+                all_benign = [line.strip() for line in f.readlines() if line.strip()]
+                negative_set = all_benign[:n_items * 2]
+                # Use remaining benign URLs as queries
+                query_set = all_benign[n_items * 2:n_items * 2 + n_queries]
+                
+            print(f"  Loaded {len(positive_set)} malicious URLs")
+            print(f"  Loaded {len(negative_set)} benign URLs")
+            print(f"  Using {len(query_set)} URLs for queries")
+        else:
+            print("  Real dataset not found, downloading...")
+            # Download the dataset first
+            from scripts.download_datasets import DatasetDownloader
+            downloader = DatasetDownloader(verbose=False)
+            downloader.download_url_blacklist()
+            
+            # Try loading again
+            if os.path.exists(malicious_file) and os.path.exists(benign_file):
+                with open(malicious_file, 'r') as f:
+                    all_malicious = [line.strip() for line in f.readlines() if line.strip()]
+                    positive_set = all_malicious[:n_items]
+                
+                with open(benign_file, 'r') as f:
+                    all_benign = [line.strip() for line in f.readlines() if line.strip()]
+                    negative_set = all_benign[:n_items * 2]
+                    query_set = all_benign[n_items * 2:n_items * 2 + n_queries]
+                    
+                print(f"  Downloaded and loaded real-world URL dataset")
+            else:
+                print("  Failed to load dataset, using basic test data")
+                # Minimal fallback
+                positive_set = [f"positive_{i}" for i in range(n_items)]
+                negative_set = [f"negative_{i}" for i in range(n_items * 5)]
+                query_set = [f"query_{i}" for i in range(n_queries)]
         
         # Create filters
         print("\nCreating filters...")
@@ -126,13 +173,56 @@ class ProblemDemonstrator:
             'memory_usage': []
         }
         
+        # Load real-world genomic dataset
+        print("\nLoading real-world genomic k-mer dataset...")
+        dataset_path = "data/datasets/genomic_kmers"
+        ref_file = f"{dataset_path}/reference_kmers.txt"
+        query_file = f"{dataset_path}/query_kmers.txt"
+        
+        all_positive = []
+        all_negative = []
+        
+        if os.path.exists(ref_file) and os.path.exists(query_file):
+            with open(ref_file, 'r') as f:
+                all_positive = [line.strip() for line in f.readlines() if line.strip()]
+            with open(query_file, 'r') as f:
+                # Use queries that are likely not in reference as negatives
+                all_negative = [line.strip() for line in f.readlines() if line.strip()]
+            print(f"  Loaded {len(all_positive)} reference k-mers")
+            print(f"  Loaded {len(all_negative)} query k-mers")
+        else:
+            print("  Real dataset not found, downloading...")
+            from scripts.download_datasets import DatasetDownloader
+            downloader = DatasetDownloader(verbose=False)
+            downloader.download_genomic_data()
+            
+            if os.path.exists(ref_file) and os.path.exists(query_file):
+                with open(ref_file, 'r') as f:
+                    all_positive = [line.strip() for line in f.readlines() if line.strip()]
+                with open(query_file, 'r') as f:
+                    all_negative = [line.strip() for line in f.readlines() if line.strip()]
+                print(f"  Downloaded and loaded genomic dataset")
+        
         print("\nTesting different dataset sizes...")
         for size in sizes:
             print(f"\nDataset size: {size:,}")
             
-            # Create dataset
-            positive_set = [f"pos_{i}" for i in range(size)]
-            negative_set = [f"neg_{i}" for i in range(size * 5)]
+            # Use subsets of real data
+            if all_positive and all_negative:
+                positive_set = all_positive[:min(size, len(all_positive))]
+                negative_set = all_negative[:min(size * 2, len(all_negative))]
+                
+                # If we need more data, wrap around
+                if len(positive_set) < size:
+                    multiplier = (size // len(all_positive)) + 1
+                    positive_set = (all_positive * multiplier)[:size]
+                if len(negative_set) < size * 2:
+                    multiplier = (size * 2 // len(all_negative)) + 1  
+                    negative_set = (all_negative * multiplier)[:size * 2]
+            else:
+                # Fallback to simple data
+                positive_set = [f"pos_{i}" for i in range(size)]
+                negative_set = [f"neg_{i}" for i in range(size * 5)]
             
             # Measure initial training time
             start_time = time.time()
@@ -207,10 +297,48 @@ class ProblemDemonstrator:
         print("PROBLEM 3: Unstable False Positive Rates")
         print("="*60)
         
-        # Create filter
-        print("\nCreating filter...")
-        positive_set = [f"positive_{i}" for i in range(n_items)]
-        negative_set = [f"negative_{i}" for i in range(n_items * 5)]
+        # Load real-world network traces dataset
+        print("\nLoading real-world network traces dataset...")
+        dataset_path = "data/datasets/network_traces"
+        normal_file = f"{dataset_path}/normal_traffic.txt"
+        attack_file = f"{dataset_path}/ddos_traffic.txt"
+        
+        positive_set = []
+        negative_set = []
+        
+        if os.path.exists(normal_file) and os.path.exists(attack_file):
+            with open(attack_file, 'r') as f:
+                all_attacks = [line.strip() for line in f.readlines() if line.strip()]
+                positive_set = all_attacks[:n_items]
+            
+            with open(normal_file, 'r') as f:
+                all_normal = [line.strip() for line in f.readlines() if line.strip()]
+                negative_set = all_normal[:n_items * 2]
+                
+            print(f"  Loaded {len(positive_set)} attack IPs")
+            print(f"  Loaded {len(negative_set)} normal IPs")
+        else:
+            print("  Real dataset not found, downloading...")
+            from scripts.download_datasets import DatasetDownloader
+            downloader = DatasetDownloader(verbose=False)
+            downloader.download_network_traces()
+            
+            if os.path.exists(normal_file) and os.path.exists(attack_file):
+                with open(attack_file, 'r') as f:
+                    all_attacks = [line.strip() for line in f.readlines() if line.strip()]
+                    positive_set = all_attacks[:n_items]
+                
+                with open(normal_file, 'r') as f:
+                    all_normal = [line.strip() for line in f.readlines() if line.strip()]
+                    negative_set = all_normal[:n_items * 2]
+                    
+                print(f"  Downloaded and loaded network traces")
+            else:
+                # Fallback
+                positive_set = [f"positive_{i}" for i in range(n_items)]
+                negative_set = [f"negative_{i}" for i in range(n_items * 5)]
+        
+        print("\nCreating filter with real-world data...")
         
         lbf = BasicLearnedBloomFilter(
             positive_set=positive_set,
@@ -310,22 +438,72 @@ class ProblemDemonstrator:
         }
     
     def _generate_uniform_queries(self, n: int, seed: int) -> List[str]:
-        """Generate uniformly distributed queries."""
+        """Generate uniformly distributed queries using real-world patterns."""
         np.random.seed(seed)
+        # Try to use real database keys dataset for realistic queries
+        dataset_path = "data/datasets/database_keys/query_keys.txt"
+        if os.path.exists(dataset_path):
+            with open(dataset_path, 'r') as f:
+                all_queries = [line.strip() for line in f.readlines() if line.strip()]
+                if len(all_queries) >= n:
+                    # Randomly sample from real queries
+                    indices = np.random.choice(len(all_queries), n, replace=False)
+                    return [all_queries[i] for i in indices]
+                else:
+                    # Repeat and shuffle if needed
+                    multiplier = (n // len(all_queries)) + 1
+                    extended = all_queries * multiplier
+                    np.random.shuffle(extended)
+                    return extended[:n]
+        # Fallback
         return [f"uniform_query_{np.random.randint(0, 1000000)}" for _ in range(n)]
     
     def _generate_skewed_queries(self, n: int, seed: int) -> List[str]:
-        """Generate skewed queries (Zipfian distribution)."""
+        """Generate skewed queries using real-world cache access patterns."""
         np.random.seed(seed)
-        # Simulate Zipfian distribution
+        # Try to use real cache keys with Zipfian access pattern
+        dataset_path = "data/datasets/database_keys/cache_keys.txt"
+        if os.path.exists(dataset_path):
+            with open(dataset_path, 'r') as f:
+                cache_keys = [line.strip() for line in f.readlines() if line.strip()]
+                if cache_keys:
+                    # Simulate cache access pattern (some keys accessed much more)
+                    popular_keys = cache_keys[:100]  # Top 100 most popular
+                    queries = []
+                    for _ in range(n):
+                        if np.random.random() < 0.8:  # 80% of queries to popular keys
+                            queries.append(np.random.choice(popular_keys))
+                        else:
+                            queries.append(np.random.choice(cache_keys))
+                    return queries
+        # Fallback
         values = np.random.zipf(2, n) % 10000
         return [f"skewed_query_{v}" for v in values]
     
     def _generate_adversarial_queries(self, n: int, seed: int) -> List[str]:
-        """Generate adversarial queries designed to trigger false positives."""
+        """Generate adversarial queries using real-world attack patterns."""
         np.random.seed(seed)
-        # Generate queries that are similar to positive items
-        prefixes = ['positive_', 'pos_', 'valid_', 'item_']
+        # Try to use variations of real malicious URLs
+        dataset_path = "data/datasets/url_blacklist/malicious_urls.txt"
+        if os.path.exists(dataset_path):
+            with open(dataset_path, 'r') as f:
+                malicious = [line.strip() for line in f.readlines()[:1000] if line.strip()]
+                if malicious:
+                    queries = []
+                    for _ in range(n):
+                        base_url = np.random.choice(malicious)
+                        # Create variations that might trigger false positives
+                        variations = [
+                            base_url.replace('http://', 'https://'),
+                            base_url.replace('.com', '.net'),
+                            base_url + '/new_path',
+                            base_url.replace('malware', 'malwares'),
+                            base_url + f'?id={np.random.randint(1000)}'
+                        ]
+                        queries.append(np.random.choice(variations))
+                    return queries
+        # Fallback
+        prefixes = ['attack_', 'malicious_', 'threat_', 'danger_']
         queries = []
         for _ in range(n):
             prefix = np.random.choice(prefixes)

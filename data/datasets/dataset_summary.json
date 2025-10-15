@@ -1,0 +1,93 @@
+{
+  "download_date": "2025-10-15 14:24:49",
+  "datasets": {
+    "url_blacklist": {
+      "files": {
+        "malicious": {
+          "path": "data/datasets/url_blacklist/malicious_urls.txt",
+          "size_bytes": 3223169,
+          "size_mb": 3.0738534927368164
+        },
+        "benign": {
+          "path": "data/datasets/url_blacklist/benign_urls.txt",
+          "size_bytes": 1496069,
+          "size_mb": 1.426762580871582
+        }
+      },
+      "total_size_mb": 4.500616073608398,
+      "metadata": {
+        "total_malicious": 50955,
+        "total_benign": 50955
+      }
+    },
+    "network_traces": {
+      "files": {
+        "normal": {
+          "path": "data/datasets/network_traces/normal_traffic.txt",
+          "size_bytes": 1043296,
+          "size_mb": 0.994964599609375
+        },
+        "attack": {
+          "path": "data/datasets/network_traces/ddos_traffic.txt",
+          "size_bytes": 770727,
+          "size_mb": 0.7350225448608398
+        }
+      },
+      "total_size_mb": 1.7299871444702148,
+      "metadata": {
+        "total_normal": 50000,
+        "total_attack": 50000
+      }
+    },
+    "genomic_kmers": {
+      "files": {
+        "reference": {
+          "path": "data/datasets/genomic_kmers/reference_kmers.txt",
+          "size_bytes": 2200000,
+          "size_mb": 2.09808349609375
+        },
+        "queries": {
+          "path": "data/datasets/genomic_kmers/query_kmers.txt",
+          "size_bytes": 1100000,
+          "size_mb": 1.049041748046875
+        }
+      },
+      "total_size_mb": 3.147125244140625,
+      "metadata": {
+        "k": 21,
+        "total_reference": 100000,
+        "total_queries": 50000
+      }
+    },
+    "database_keys": {
+      "files": {
+        "primary": {
+          "path": "data/datasets/database_keys/primary_keys.txt",
+          "size_bytes": 1088895,
+          "size_mb": 1.0384511947631836
+        },
+        "composite": {
+          "path": "data/datasets/database_keys/composite_keys.txt",
+          "size_bytes": 2405560,
+          "size_mb": 2.2941207885742188
+        },
+        "cache": {
+          "path": "data/datasets/database_keys/cache_keys.txt",
+          "size_bytes": 667346,
+          "size_mb": 0.6364307403564453
+        },
+        "queries": {
+          "path": "data/datasets/database_keys/query_keys.txt",
+          "size_bytes": 632784,
+          "size_mb": 0.6034698486328125
+        }
+      },
+      "total_size_mb": 4.57247257232666,
+      "metadata": {
+        "total_keys": 200000,
+        "total_queries": 50000
+      }
+    }
+  },
+  "total_size_mb": 13.950201034545898
+}
