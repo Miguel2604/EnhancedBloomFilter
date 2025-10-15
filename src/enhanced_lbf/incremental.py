@@ -168,6 +168,9 @@ class IncrementalLBF:
             initial_size=1000,
             target_fpr=target_fpr
         )
+
+        base_capacity = max(window_size, reservoir_size, 1)
+        self.primary_filter = StandardBloomFilter(base_capacity * 2, target_fpr)
         
         # Statistics
         self.total_items = 0
@@ -200,6 +203,9 @@ class IncrementalLBF:
         
         # Extract features
         features = self._extract_features(item)
+
+        if label == 1:
+            self.primary_filter.add(item)
         
         # Get current prediction
         current_pred = self.model.predict_proba(features)
@@ -263,8 +269,13 @@ class IncrementalLBF:
         
         # Check threshold
         if probability >= self.threshold:
+            if self.primary_filter.query(item):
+                return True
+            return self.backup_filter.query(item)
+
+        if self.primary_filter.query(item):
             return True
-        
+
         # Check backup filter
         return self.backup_filter.query(item)
     

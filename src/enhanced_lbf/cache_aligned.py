@@ -130,6 +130,21 @@ class CacheAlignedLBF:
             target_fpr=target_fpr,
             verbose=False
         )
+
+        self._backup_items = self._identify_backup_items(self.positive_set)
+        self._backup_capacity = max(1, self.base_lbf.backup_filter.n)
+
+        base_capacity = len(positive_set) + len(negative_set)
+        self._primary_capacity = max(1, base_capacity)
+        self.primary_filter = StandardBloomFilter(self._primary_capacity, target_fpr)
+        for item in positive_set:
+            self.primary_filter.add(item)
+
+        self.model_weights = self.base_lbf.model.coef_.astype(np.float32).flatten()
+        self.model_intercept = float(self.base_lbf.model.intercept_[0])
+        self._scaler_mean = self.base_lbf.scaler.mean_.astype(np.float32)
+        self._scaler_scale = self.base_lbf.scaler.scale_.astype(np.float32)
+        self._scaler_scale[self._scaler_scale == 0] = 1.0
         
         # Initialize cache-aligned blocks
         self._init_cache_blocks()
@@ -157,48 +172,72 @@ class CacheAlignedLBF:
         
         # Create block index for fast lookup
         self.block_index = {}
+
+    def _identify_backup_items(self, items: List[Any]) -> List[Any]:
+        backup_items = []
+        for item in items:
+            features = self.base_lbf._extract_features(item)
+            features_scaled = self.base_lbf.scaler.transform(features.reshape(1, -1))
+            probability = self.base_lbf.model.predict_proba(features_scaled)[0, 1]
+            if probability < self.base_lbf.threshold:
+                backup_items.append(item)
+        return backup_items
     
     def _distribute_data(self):
         """Distribute model weights and filter bits across cache blocks."""
         if self.verbose:
             print("Distributing data across cache blocks...")
         
-        # Get model weights
-        if hasattr(self.base_lbf.model, 'coef_'):
-            model_weights = self.base_lbf.model.coef_.flatten()
+        base_weights = self.model_weights.astype(np.float32)
+        if base_weights.size < 8:
+            padded_weights = np.zeros(8, dtype=np.float32)
+            padded_weights[:base_weights.size] = base_weights
         else:
-            model_weights = np.random.randn(self.n_blocks * 8)
+            padded_weights = base_weights[:8]
+
+        for block in self.blocks:
+            block.set_model_weights(padded_weights)
         
-        # Distribute weights across blocks
-        weights_per_block = max(1, len(model_weights) // self.n_blocks)
-        
-        for i, block in enumerate(self.blocks):
-            start_idx = i * weights_per_block
-            end_idx = min(start_idx + 8, len(model_weights))
-            
-            if start_idx < len(model_weights):
-                block.set_model_weights(model_weights[start_idx:end_idx])
-        
-        # Distribute backup filter bits
-        # For simplicity, replicate critical parts across blocks
-        backup_size = self.base_lbf.backup_filter.m
+        self._populate_block_filter_bits()
+
+    def _populate_block_filter_bits(self):
+        backup_size = getattr(self.base_lbf.backup_filter, 'm', 0)
+        if backup_size <= 0:
+            zero_bits = np.zeros(28, dtype=np.uint8)
+            for block in self.blocks:
+                block.set_filter_bits(zero_bits)
+            return
+
         bits_per_block = 224  # 28 bytes * 8 bits
-        
+
         for i, block in enumerate(self.blocks):
-            # Each block handles a portion of the filter
             start_bit = (i * bits_per_block) % backup_size
-            
-            # Extract bits from backup filter
             bits = []
-            for j in range(28):  # 28 bytes
+            for j in range(28):
                 byte_val = 0
-                for k in range(8):  # 8 bits per byte
+                for k in range(8):
                     bit_idx = (start_bit + j * 8 + k) % backup_size
                     if self.base_lbf.backup_filter.bit_array[bit_idx]:
                         byte_val |= (1 << k)
                 bits.append(byte_val)
-            
             block.set_filter_bits(np.array(bits, dtype=np.uint8))
+
+    def _resize_backup_filter(self, new_capacity: int):
+        new_capacity = max(new_capacity, len(self._backup_items), 1)
+        new_filter = StandardBloomFilter(new_capacity, self.target_fpr)
+        for item in self._backup_items:
+            new_filter.add(item)
+        self.base_lbf.backup_filter = new_filter
+        self._backup_capacity = new_capacity
+        self._populate_block_filter_bits()
+
+    def _resize_primary_filter(self, new_capacity: int):
+        new_capacity = max(new_capacity, len(self.positive_set), 1)
+        new_filter = StandardBloomFilter(new_capacity, self.target_fpr)
+        for item in self.positive_set:
+            new_filter.add(item)
+        self.primary_filter = new_filter
+        self._primary_capacity = new_capacity
     
     def _get_block_id(self, item: Any) -> int:
         """Determine which block should handle an item."""
@@ -213,6 +252,20 @@ class CacheAlignedLBF:
         # This is a placeholder for demonstration
         if block_id < len(self.blocks):
             _ = self.blocks[block_id].data[0]  # Touch the data
+
+    def _extract_features(self, item: Any) -> np.ndarray:
+        features = self.base_lbf._extract_features(item)
+        return features.astype(np.float32)
+
+    def _scale_features(self, features: np.ndarray) -> np.ndarray:
+        return (features - self._scaler_mean) / self._scaler_scale
+
+    def _scale_features_batch(self, features_matrix: np.ndarray) -> np.ndarray:
+        return (features_matrix - self._scaler_mean) / self._scaler_scale
+
+    @staticmethod
+    def _sigmoid(values: np.ndarray) -> np.ndarray:
+        return 1.0 / (1.0 + np.exp(-np.clip(values, -60.0, 60.0)))
     
     def query(self, item: Any) -> bool:
         """
@@ -237,26 +290,17 @@ class CacheAlignedLBF:
         else:
             self.cache_misses += 1
         
-        # Extract features (lightweight)
-        features = self._extract_simple_features(item)
-        
-        # Compute score using block's weights
-        score = np.dot(features[:len(block.model_weights)], 
-                      block.model_weights[:len(features)])
-        
-        # Apply sigmoid
-        probability = 1 / (1 + np.exp(-score))
+        features = self._extract_features(item)
+        features_scaled = self._scale_features(features)
+        score = np.dot(self.model_weights, features_scaled) + self.model_intercept
+        probability = float(self._sigmoid(score))
+        backup_hit = self.base_lbf.backup_filter.query(item)
         
         # Check threshold
         if probability >= self.base_lbf.threshold:
-            return True
-        
-        # Check backup filter bits in the same block
-        item_hash = hashlib.md5(str(item).encode()).digest()
-        hash_val = struct.unpack('I', item_hash[4:8])[0]
-        bit_idx = hash_val % 224  # Bits available in block
-        
-        return block.query_bit(bit_idx)
+            return self.primary_filter.query(item)
+
+        return backup_hit
     
     def batch_query(self, items: List[Any]) -> List[bool]:
         """
@@ -299,71 +343,28 @@ class CacheAlignedLBF:
         Returns:
             Boolean results for each item
         """
-        # Extract features for all items in chunk
         features_matrix = np.array([
-            self._extract_simple_features(item) 
+            self._extract_features(item)
             for item in chunk
-        ])
+        ], dtype=np.float32)
+
+        features_scaled = self._scale_features_batch(features_matrix)
         
         # Get block IDs
-        block_ids = [self._get_block_id(item) for item in chunk]
-        
-        # Gather weights from blocks (vectorized)
-        weights_matrix = np.array([
-            self.blocks[bid].model_weights 
-            for bid in block_ids
-        ])
-        
-        # Vectorized dot product
-        scores = np.sum(features_matrix[:, :8] * weights_matrix, axis=1)
-        
-        # Vectorized sigmoid
-        probabilities = 1 / (1 + np.exp(-scores))
+        scores = features_scaled @ self.model_weights + self.model_intercept
+        probabilities = self._sigmoid(scores)
         
         # Check thresholds
         results = []
-        for i, (item, prob, bid) in enumerate(zip(chunk, probabilities, block_ids)):
+        for item, prob in zip(chunk, probabilities):
+            backup_hit = self.base_lbf.backup_filter.query(item)
+
             if prob >= self.base_lbf.threshold:
-                results.append(True)
+                results.append(self.primary_filter.query(item))
             else:
-                # Check backup filter
-                block = self.blocks[bid]
-                item_hash = hashlib.md5(str(item).encode()).digest()
-                hash_val = struct.unpack('I', item_hash[4:8])[0]
-                bit_idx = hash_val % 224
-                results.append(block.query_bit(bit_idx))
+                results.append(backup_hit)
         
         return results
-    
-    def _extract_simple_features(self, item: Any) -> np.ndarray:
-        """
-        Extract simplified features (faster than base implementation).
-        
-        Args:
-            item: Item to extract features from
-            
-        Returns:
-            Feature vector
-        """
-        item_str = str(item)
-        
-        # Use only 8 features for cache efficiency
-        features = np.zeros(8, dtype=np.float32)
-        
-        # Fast feature extraction
-        features[0] = len(item_str)
-        features[1] = ord(item_str[0]) if item_str else 0
-        features[2] = ord(item_str[-1]) if item_str else 0
-        features[3] = sum(c.isdigit() for c in item_str[:10])
-        features[4] = sum(c.isalpha() for c in item_str[:10])
-        
-        # Simple hash features
-        hash_val = hash(item_str)
-        features[5] = (hash_val & 0xFF) / 255.0
-        features[6] = ((hash_val >> 8) & 0xFF) / 255.0
-        features[7] = ((hash_val >> 16) & 0xFF) / 255.0
-        
-        return features
     
     def add(self, item: Any):
         """
@@ -375,16 +376,28 @@ class CacheAlignedLBF:
         # Determine block
         block_id = self._get_block_id(item)
         block = self.blocks[block_id]
-        
-        # Set bit in block's filter portion
-        item_hash = hashlib.md5(str(item).encode()).digest()
-        hash_val = struct.unpack('I', item_hash[4:8])[0]
-        bit_idx = hash_val % 224
-        
-        block.set_bit(bit_idx)
-        
-        # Also update base backup filter
-        self.base_lbf.backup_filter.add(item)
+
+        features = self._extract_features(item)
+        features_scaled = self._scale_features(features)
+        score = np.dot(self.model_weights, features_scaled) + self.model_intercept
+        probability = float(self._sigmoid(score))
+
+        if probability < self.base_lbf.threshold:
+            self._backup_items.append(item)
+            if len(self._backup_items) > self._backup_capacity:
+                new_capacity = max(self._backup_capacity * 2, len(self._backup_items))
+                self._resize_backup_filter(new_capacity)
+            self.base_lbf.backup_filter.add(item)
+            item_hash = hashlib.md5(str(item).encode()).digest()
+            hash_val = struct.unpack('I', item_hash[4:8])[0]
+            bit_idx = hash_val % 224
+            block.set_bit(bit_idx)
+
+        self.positive_set.append(item)
+        if self.primary_filter.count + 1 > self._primary_capacity:
+            new_capacity = max(self._primary_capacity * 2, self.primary_filter.count + 1)
+            self._resize_primary_filter(new_capacity)
+        self.primary_filter.add(item)
     
     def get_cache_stats(self) -> Dict:
         """Get cache performance statistics."""
