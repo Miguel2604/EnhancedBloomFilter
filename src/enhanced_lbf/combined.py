@@ -11,6 +11,7 @@ This is the production-ready version with all fixes applied:
 import numpy as np
 from typing import Any, List, Tuple, Optional, Dict
 from collections import deque
+from functools import lru_cache
 import hashlib
 import struct
 import time
@@ -71,15 +72,23 @@ class CombinedEnhancedLBF:
         self.cache_hits = 0
         self.cache_misses = 0
         
+        # Primary filter stores ALL positive items
+        initial_size = len(initial_positive_set) if initial_positive_set else 10000
+        self.primary_filter = StandardBloomFilter(
+            expected_elements=max(initial_size, 10000),
+            false_positive_rate=target_fpr
+        )
+        
         # Backup filter for positive items (malicious URLs)
         self.positive_backup = StandardBloomFilter(
             expected_elements=10000,
             false_positive_rate=target_fpr
         )
         
-        # Add initial positive set to backup
+        # Add initial positive set to both filters
         if initial_positive_set:
             for item in initial_positive_set:
+                self.primary_filter.add(item)
                 self.positive_backup.add(item)
         
         if verbose:
@@ -152,8 +161,9 @@ class CombinedEnhancedLBF:
         """Add item with proper training."""
         self.total_updates += 1
         
-        # Add positive items to backup filter
+        # Add positive items to both filters
         if label == 1:
+            self.primary_filter.add(item)
             self.positive_backup.add(item)
         
         # Incremental learning
@@ -180,18 +190,18 @@ class CombinedEnhancedLBF:
         """Query with improved discrimination."""
         self.total_queries += 1
         
-        # First check the positive backup filter
-        if self.positive_backup.query(item):
-            # Item is in the positive set (malicious)
-            result = True
+        # Use model for routing decision
+        features = self._extract_url_features(item)
+        score = self.model.predict(features)
+        probability = 1 / (1 + np.exp(-score))
+        
+        # Route based on probability and verify with actual filters
+        if probability >= self.threshold:
+            # High probability - check primary filter
+            result = self.primary_filter.query(item)
         else:
-            # Use model for prediction
-            features = self._extract_url_features(item)
-            score = self.model.predict(features)
-            probability = 1 / (1 + np.exp(-score))
-            
-            # Use threshold for decision
-            result = probability >= self.threshold
+            # Low probability - check backup filter
+            result = self.positive_backup.query(item)
         
         # Track for adaptive control
         if self.adaptive_enabled and ground_truth is not None:

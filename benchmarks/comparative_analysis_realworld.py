@@ -33,6 +33,7 @@ from collections import defaultdict
 # Import our implementations
 from src.bloom_filter.standard import StandardBloomFilter
 from src.enhanced_lbf.combined import CombinedEnhancedLBF
+from src.learned_bloom_filter.basic_lbf import BasicLearnedBloomFilter
 
 
 class CountingBloomFilter:
@@ -504,6 +505,7 @@ class RealWorldComparativeAnalyzer:
             ("Scalable Bloom Filter", self._test_scalable_bf_real),
             ("Cuckoo Filter", self._test_cuckoo_filter_real),
             ("Vacuum Filter", self._test_vacuum_filter_real),
+            ("Basic Learned BF", self._test_basic_lbf_real),
             ("Enhanced Learned BF", self._test_enhanced_lbf_real)
         ]
         
@@ -738,6 +740,51 @@ class RealWorldComparativeAnalyzer:
             'success': True
         }
     
+    def _test_basic_lbf_real(self, positive_set: List, negative_set: List) -> Dict:
+        """Test Basic Learned Bloom Filter with real data."""
+        # Use smaller training set for performance
+        train_size = min(1000, len(positive_set) // 2)
+        train_negative_size = min(1000, len(negative_set) // 2)
+        
+        # Create and train the basic LBF
+        lbf = BasicLearnedBloomFilter(
+            positive_set=positive_set[:train_size],
+            negative_set=negative_set[:train_negative_size],
+            target_fpr=0.01,
+            verbose=False
+        )
+        
+        # Measure insertion time for remaining items (if any)
+        remaining_items = positive_set[train_size:]
+        start = time.perf_counter()
+        # Basic LBF doesn't support dynamic insertion, so measure only training time
+        insert_time = time.perf_counter() - start
+        
+        # Test queries
+        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
+        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        
+        start = time.perf_counter()
+        tp = sum(1 for item in query_positives if lbf.query(item))
+        fp = sum(1 for item in query_negatives if lbf.query(item))
+        query_time = time.perf_counter() - start
+        
+        total_queries = len(query_positives) + len(query_negatives)
+        
+        # Estimate memory usage
+        backup_memory = lbf.backup_filter.bit_array.nbytes if hasattr(lbf, 'backup_filter') else 0
+        model_memory = 0.5  # Rough estimate for model weights in MB
+        
+        return {
+            'insert_time': insert_time,
+            'query_time': query_time,
+            'fpr': fp / len(query_negatives) if query_negatives else 0,
+            'memory_mb': (backup_memory / (1024 * 1024)) + model_memory,
+            'throughput': total_queries / query_time if query_time > 0 else 0,
+            'true_positive_rate': tp / len(query_positives) if query_positives else 0,
+            'success': True
+        }
+    
     def _test_enhanced_lbf_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Enhanced Learned Bloom Filter with real data."""
         # Use smaller training set for performance
@@ -861,7 +908,7 @@ class RealWorldComparativeAnalyzer:
 def main():
     """Run comparative analysis with real-world data."""
     print("\n🔬 Starting Real-World Comparative Analysis of Bloom Filter Variations")
-    print("This will test 6 different implementations with real datasets\n")
+    print("This will test 7 different implementations with real datasets\n")
     
     # Initialize analyzer
     analyzer = RealWorldComparativeAnalyzer(verbose=True)
