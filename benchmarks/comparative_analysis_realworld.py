@@ -536,7 +536,15 @@ class RealWorldComparativeAnalyzer:
     
     def _test_standard_bf_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Standard Bloom Filter with real data."""
-        n = len(positive_set)
+        # FIXED: Proper train/test split to avoid data leakage
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        train_positive = positive_set[:train_split_idx]
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
+        n = len(train_positive)
         
         # Create filter
         bf = StandardBloomFilter(
@@ -544,15 +552,15 @@ class RealWorldComparativeAnalyzer:
             false_positive_rate=0.01
         )
         
-        # Test insertions
+        # Test insertions (only on training set)
         start = time.perf_counter()
-        for item in positive_set:
+        for item in train_positive:
             bf.add(item)
         insert_time = time.perf_counter() - start
         
-        # Test queries - sample for performance
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if bf.query(item))
@@ -573,7 +581,15 @@ class RealWorldComparativeAnalyzer:
     
     def _test_counting_bf_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Counting Bloom Filter with real data."""
-        n = len(positive_set)
+        # FIXED: Proper train/test split
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        train_positive = positive_set[:train_split_idx]
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
+        n = len(train_positive)
         
         # Create filter
         cbf = CountingBloomFilter(
@@ -581,23 +597,23 @@ class RealWorldComparativeAnalyzer:
             false_positive_rate=0.01
         )
         
-        # Test insertions
+        # Test insertions (only on training set)
         start = time.perf_counter()
-        for item in positive_set:
+        for item in train_positive:
             cbf.add(item)
         insert_time = time.perf_counter() - start
         
-        # Test queries
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if cbf.query(item))
         fp = sum(1 for item in query_negatives if cbf.query(item))
         query_time = time.perf_counter() - start
         
-        # Test deletion (unique feature)
-        delete_items = positive_set[:100] if len(positive_set) >= 100 else positive_set[:10]
+        # Test deletion (unique feature) - use training items
+        delete_items = train_positive[:100] if len(train_positive) >= 100 else train_positive[:10]
         delete_start = time.perf_counter()
         for item in delete_items:
             cbf.remove(item)
@@ -618,6 +634,14 @@ class RealWorldComparativeAnalyzer:
     
     def _test_scalable_bf_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Scalable Bloom Filter with real data."""
+        # FIXED: Proper train/test split
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        train_positive = positive_set[:train_split_idx]
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
         # Start with small initial capacity
         sbf = ScalableBloomFilter(
             initial_capacity=1000,
@@ -625,15 +649,15 @@ class RealWorldComparativeAnalyzer:
             growth_factor=2
         )
         
-        # Test insertions
+        # Test insertions (only on training set)
         start = time.perf_counter()
-        for item in positive_set:
+        for item in train_positive:
             sbf.add(item)
         insert_time = time.perf_counter() - start
         
-        # Test queries
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if sbf.query(item))
@@ -655,7 +679,15 @@ class RealWorldComparativeAnalyzer:
     
     def _test_cuckoo_filter_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Cuckoo Filter with real data."""
-        n = len(positive_set)
+        # FIXED: Proper train/test split
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        train_positive = positive_set[:train_split_idx]
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
+        n = len(train_positive)
         
         # Create filter
         cf = CuckooFilter(
@@ -664,25 +696,25 @@ class RealWorldComparativeAnalyzer:
             fingerprint_size=8
         )
         
-        # Test insertions
+        # Test insertions (only on training set)
         start = time.perf_counter()
         failed_inserts = 0
-        for item in positive_set:
+        for item in train_positive:
             if not cf.add(item):
                 failed_inserts += 1
         insert_time = time.perf_counter() - start
         
-        # Test queries
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if cf.query(item))
         fp = sum(1 for item in query_negatives if cf.query(item))
         query_time = time.perf_counter() - start
         
-        # Test deletion (unique feature)
-        delete_items = positive_set[:100] if len(positive_set) >= 100 else positive_set[:10]
+        # Test deletion (unique feature) - use training items
+        delete_items = train_positive[:100] if len(train_positive) >= 100 else train_positive[:10]
         delete_start = time.perf_counter()
         for item in delete_items:
             cf.delete(item)
@@ -704,7 +736,15 @@ class RealWorldComparativeAnalyzer:
     
     def _test_vacuum_filter_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Vacuum Filter with real data."""
-        n = len(positive_set)
+        # FIXED: Proper train/test split
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        train_positive = positive_set[:train_split_idx]
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
+        n = len(train_positive)
         
         # Create filter
         vf = VacuumFilter(
@@ -712,15 +752,15 @@ class RealWorldComparativeAnalyzer:
             false_positive_rate=0.01
         )
         
-        # Test insertions
+        # Test insertions (only on training set)
         start = time.perf_counter()
-        for item in positive_set:
+        for item in train_positive:
             vf.add(item)
         insert_time = time.perf_counter() - start
         
-        # Test queries
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if vf.query(item))
@@ -742,27 +782,36 @@ class RealWorldComparativeAnalyzer:
     
     def _test_basic_lbf_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Basic Learned Bloom Filter with real data."""
+        # FIXED: Proper train/test split
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        train_positive = positive_set[:train_split_idx]
+        train_negative = negative_set[:train_neg_split_idx]
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
         # Use smaller training set for performance
-        train_size = min(1000, len(positive_set) // 2)
-        train_negative_size = min(1000, len(negative_set) // 2)
+        train_size = min(1000, len(train_positive))
+        train_negative_size = min(1000, len(train_negative))
         
         # Create and train the basic LBF
         lbf = BasicLearnedBloomFilter(
-            positive_set=positive_set[:train_size],
-            negative_set=negative_set[:train_negative_size],
+            positive_set=train_positive[:train_size],
+            negative_set=train_negative[:train_negative_size],
             target_fpr=0.01,
             verbose=False
         )
         
         # Measure insertion time for remaining items (if any)
-        remaining_items = positive_set[train_size:]
+        remaining_items = train_positive[train_size:]
         start = time.perf_counter()
         # Basic LBF doesn't support dynamic insertion, so measure only training time
         insert_time = time.perf_counter() - start
         
-        # Test queries
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if lbf.query(item))
@@ -787,27 +836,40 @@ class RealWorldComparativeAnalyzer:
     
     def _test_enhanced_lbf_real(self, positive_set: List, negative_set: List) -> Dict:
         """Test Enhanced Learned Bloom Filter with real data."""
-        # Use smaller training set for performance
-        train_size = min(1000, len(positive_set) // 5)
-        train_negative_size = min(1000, len(negative_set) // 5)
+        # FIXED: Proper train/test split to avoid data leakage
+        # Split: 80% train, 20% test
+        train_split_idx = int(len(positive_set) * 0.8)
+        train_neg_split_idx = int(len(negative_set) * 0.8)
+        
+        # Training sets
+        train_positive = positive_set[:train_split_idx]
+        train_negative = negative_set[:train_neg_split_idx]
+        
+        # Test sets (no overlap with training)
+        test_positive = positive_set[train_split_idx:]
+        test_negative = negative_set[train_neg_split_idx:]
+        
+        # Use subset for initial training (for performance)
+        train_size = min(1000, len(train_positive))
+        train_negative_size = min(1000, len(train_negative))
         
         lbf = CombinedEnhancedLBF(
-            initial_positive_set=positive_set[:train_size],
-            initial_negative_set=negative_set[:train_negative_size],
+            initial_positive_set=train_positive[:train_size],
+            initial_negative_set=train_negative[:train_negative_size],
             target_fpr=0.01,
             verbose=False
         )
         
-        # Test insertions (remaining items)
-        remaining_items = positive_set[train_size:]
+        # Test insertions (remaining training items)
+        remaining_items = train_positive[train_size:]
         start = time.perf_counter()
         for item in remaining_items:
             lbf.add(item, label=1)
         insert_time = time.perf_counter() - start
         
-        # Test queries
-        query_positives = positive_set[:1000] if len(positive_set) >= 1000 else positive_set
-        query_negatives = negative_set[:1000] if len(negative_set) >= 1000 else negative_set
+        # Test queries on UNSEEN test set
+        query_positives = test_positive[:1000] if len(test_positive) >= 1000 else test_positive
+        query_negatives = test_negative[:1000] if len(test_negative) >= 1000 else test_negative
         
         start = time.perf_counter()
         tp = sum(1 for item in query_positives if lbf.query(item))

@@ -1,15 +1,22 @@
 # Enhanced Learned Bloom Filter
 
-A comprehensive implementation of Enhanced Learned Bloom Filters that addresses three critical problems: poor cache locality, expensive retraining, and unstable false positive rates.
+A comprehensive implementation of Enhanced Learned Bloom Filters that addresses three critical problems in traditional Learned Bloom Filters: poor cache locality, expensive retraining, and unstable false positive rates.
 
 ## 🎯 Overview
 
 This project implements an enhanced version of Learned Bloom Filters (LBF) that combines machine learning with traditional probabilistic data structures to achieve:
 
-- **3x query throughput improvement** through cache optimization
-- **O(1) update complexity** with incremental learning
-- **±10% FPR variance** (vs ±800% in basic LBF) through adaptive control
-- **40-60% memory reduction** compared to standard Bloom Filters
+- **Lowest FPR** - 0.2% average (5x better than Standard Bloom Filter)
+- **O(1) update complexity** - 0.007ms per update with incremental learning
+- **±10% FPR variance** - Stable performance through adaptive control
+- **Cache-optimized architecture** - 64-byte alignment, SIMD vectorization
+
+## 📋 Documentation
+
+- **[Results](docs/RESULTS.md)** - Performance metrics and analysis
+- **[Comparative Analysis](docs/COMPARATIVE_ANALYSIS.md)** - Comparison with 6 other filters
+- **[Methodology](docs/METHODOLOGY.md)** - Testing approach and validation
+- **[Testing Fix Summary](docs/testing/TESTING_FIX_SUMMARY.md)** - Data leakage fix details
 
 ## 📊 Key Features
 
@@ -107,44 +114,60 @@ BloomFilter/
 # Run unit tests
 pytest tests/
 
-# Run problem demonstrations
+# Run comprehensive benchmarks (with real-world data)
+python benchmarks/comparative_analysis_realworld.py
+
+# Validate testing methodology
+python docs/testing/verify_testing_methodology.py
+
+# Problem demonstrations
 python experiments/problem_demonstration.py
 
-# Run comprehensive benchmarks
-python benchmarks/comprehensive_benchmark.py
-
-# Test individual solutions
+# Test individual enhancements
 python src/enhanced_lbf/cache_aligned.py    # Cache solution
 python src/enhanced_lbf/incremental.py      # Incremental learning
 python src/enhanced_lbf/adaptive.py         # Adaptive threshold
-python src/enhanced_lbf/combined.py         # Combined solution
+python src/enhanced_lbf/combined.py         # All enhancements
 ```
 
 ## 📈 Performance Results
 
-### Query Throughput
-| Implementation | Queries/sec | Speedup |
-|---------------|-------------|---------|
-| Standard BF | 228,766 | 1.00x |
-| Basic LBF | 195,432 | 0.85x |
-| Cache-Aligned | 324,849 | 1.42x |
-| Incremental | 238,045 | 1.04x |
-| Adaptive | 239,520 | 1.05x |
-| **Combined** | **375,746** | **1.64x** |
+### False Positive Rate (Lower is Better)
 
-### Update Complexity
+| Filter | Average FPR | vs Standard BF |
+|--------|-------------|----------------|
+| **Enhanced LBF** | **0.20%** | **5x better** 🏆 |
+| Counting BF | 0.65% | 1.6x better |
+| Standard BF | 1.03% | Baseline |
+| Cuckoo Filter | 2.33% | 2.3x worse |
+
+### Query Throughput
+
+| Filter | Throughput | vs Standard BF |
+|--------|------------|----------------|
+| **Standard BF** | **3.4M ops/sec** | Baseline 🏆 |
+| Cuckoo Filter | 2.5M ops/sec | 0.74x |
+| Counting BF | 2.3M ops/sec | 0.68x |
+| **Enhanced LBF** | **270K ops/sec** | 0.08x ⚠️ |
+
+*Enhanced LBF trades throughput for superior accuracy*
+
+### Update Performance
+
 | Implementation | Update Time | Complexity |
 |---------------|-------------|------------|
-| Basic LBF | 10ms | O(n) |
-| Incremental LBF | 0.01ms | O(1) |
-| Combined | 0.01ms | O(1) |
+| Standard BF | N/A | Rebuild required |
+| **Enhanced LBF** | **0.007ms** | **O(1)** ✅ |
+| Counting BF | <0.001ms | O(1) |
 
 ### FPR Stability
+
 | Implementation | FPR Variance |
 |---------------|--------------|
 | Basic LBF | ±800% |
-| Adaptive LBF | ±15% |
-| Combined | ±10% |
+| **Enhanced LBF** | **±10%** ✅ |
+
+**See [docs/RESULTS.md](docs/RESULTS.md) for detailed performance analysis.**
 
 ## 🔬 Algorithms Used
 
@@ -204,10 +227,15 @@ Results will be saved to `data/results/` with detailed performance metrics.
 
 ## 🔍 Key Findings
 
-1. **Cache optimization provides immediate benefits** - 42% throughput improvement with minimal complexity
-2. **Online learning eliminates retraining bottleneck** - O(1) updates enable real-time applications
-3. **Adaptive control stabilizes performance** - 80x reduction in FPR variance
-4. **Combined approach is synergistic** - 64% overall improvement exceeds individual gains
+1. **Lowest FPR achieved** - 0.2% average across real-world datasets (5x better than Standard BF)
+2. **O(1) incremental updates** - Eliminates expensive retraining bottleneck
+3. **Adaptive control stabilizes FPR** - ±10% variance vs ±800% in basic LBF
+4. **Trade-offs are real** - 12x throughput penalty for superior accuracy
+5. **Methodology matters** - Fixed data leakage issue in testing (see [docs/METHODOLOGY.md](docs/METHODOLOGY.md))
+
+## ⚠️ Important Note on Testing
+
+**October 25, 2025 Update**: We discovered and fixed a data leakage issue in the original testing methodology where training and test sets had 100% overlap. The corrected methodology uses proper 80/20 train/test split with no overlap. **FPR results improved** with the fix (0.1-0.3% vs 0.6-0.9% previously). See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for details.
 
 ## 📝 License
 
