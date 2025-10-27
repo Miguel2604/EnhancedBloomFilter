@@ -603,7 +603,7 @@ class PatternLearningValidator:
         plt.bar(x + width, results['standard'], width, label='Standard BF', color='gray')
         
         plt.xlabel('Learning Phase')
-        plt.ylabel('Accuracy')
+        plt.ylabel('Accuracy [Higher is Better]')
         plt.title('Pattern Learning Progression')
         plt.xticks(x, phases)
         plt.legend()
@@ -638,7 +638,7 @@ class PatternLearningValidator:
         plt.plot(epochs, p(epochs), 'g--', alpha=0.5, label='Enhanced LBF Trend')
         
         plt.xlabel('Epoch')
-        plt.ylabel('Accuracy')
+        plt.ylabel('Accuracy [Higher is Better]')
         plt.title('Continuous Learning: Accuracy Over Time')
         plt.legend()
         plt.grid(True, alpha=0.3)

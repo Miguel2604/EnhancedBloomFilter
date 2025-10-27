@@ -369,7 +369,7 @@ class AdaptiveControlValidator:
                         target_fpr - 0.005, target_fpr + 0.005,
                         alpha=0.2, color='red', label='±0.5% tolerance')
         plt.xlabel('Epoch')
-        plt.ylabel('False Positive Rate')
+        plt.ylabel('False Positive Rate [Lower & Stable is Better]')
         plt.title('FPR Stability Over Time')
         plt.legend()
         plt.grid(True, alpha=0.3)
@@ -398,7 +398,7 @@ class AdaptiveControlValidator:
         
         plt.axhline(y=0.01, color='r', linestyle='--', label='Target (1%)')
         plt.xlabel('Time Steps')
-        plt.ylabel('False Positive Rate')
+        plt.ylabel('False Positive Rate [Lower & Stable is Better]')
         plt.title('PID Controller Response Comparison')
         plt.legend()
         plt.grid(True, alpha=0.3)

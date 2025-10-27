@@ -276,7 +276,7 @@ class CacheAlignmentValidator:
         plt.plot(batch_sizes, results['cache_aligned'], 'b-o', label='Cache-Aligned LBF')
         plt.plot(batch_sizes, results['basic'], 'r-s', label='Basic LBF')
         plt.xlabel('Batch Size')
-        plt.ylabel('Throughput (ops/sec)')
+        plt.ylabel('Throughput (ops/sec) [Higher is Better]')
         plt.title('Throughput Comparison: Cache-Aligned vs Basic LBF')
         plt.legend()
         plt.grid(True, alpha=0.3)

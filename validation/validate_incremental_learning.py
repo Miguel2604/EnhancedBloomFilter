@@ -330,7 +330,7 @@ class IncrementalLearningValidator:
         plt.plot(sizes, inc_times, 'b-o', label='Incremental (O(1))')
         plt.plot(sizes, retrain_times, 'r-s', label='Retrain (O(n))')
         plt.xlabel('Dataset Size')
-        plt.ylabel('Update Time (ms)')
+        plt.ylabel('Update Time (ms) [Lower is Better]')
         plt.title('Update Complexity Comparison')
         plt.legend()
         plt.grid(True, alpha=0.3)
@@ -341,7 +341,7 @@ class IncrementalLearningValidator:
         speedups = [r/i for i, r in zip(inc_times, retrain_times)]
         plt.plot(sizes, speedups, 'g-^')
         plt.xlabel('Dataset Size')
-        plt.ylabel('Speedup Factor')
+        plt.ylabel('Speedup Factor [Higher is Better]')
         plt.title('Incremental vs Retrain Speedup')
         plt.grid(True, alpha=0.3)
         

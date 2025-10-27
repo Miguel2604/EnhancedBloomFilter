@@ -520,7 +520,7 @@ class ProblemDemonstrator:
                 bins=50, alpha=0.5, label='Standard BF')
         ax1.hist(results['learned_bf']['times'][:1000], 
                 bins=50, alpha=0.5, label='Learned BF')
-        ax1.set_xlabel('Query Time (seconds)')
+        ax1.set_xlabel('Query Time (seconds) [Lower is Better]')
         ax1.set_ylabel('Frequency')
         ax1.set_title('Query Time Distribution')
         ax1.legend()
@@ -531,7 +531,7 @@ class ProblemDemonstrator:
         avg_times = [results['standard_bf']['avg_time'], 
                     results['learned_bf']['avg_time']]
         ax2.bar(labels, avg_times)
-        ax2.set_ylabel('Average Query Time (seconds)')
+        ax2.set_ylabel('Average Query Time (seconds) [Lower is Better]')
         ax2.set_title('Average Query Performance')
         
         plt.suptitle('Cache Performance Problem Demonstration')
@@ -552,7 +552,7 @@ class ProblemDemonstrator:
         ax1.plot(results['sizes'], results['update_times'], 
                 's-', label='Update Time')
         ax1.set_xlabel('Dataset Size')
-        ax1.set_ylabel('Time (seconds)')
+        ax1.set_ylabel('Time (seconds) [Lower is Better]')
         ax1.set_title('Retraining Time Complexity')
         ax1.legend()
         ax1.grid(True)
@@ -567,7 +567,7 @@ class ProblemDemonstrator:
         ax2.loglog(results['sizes'], fit_line, 
                   '--', label=f'O(n^{coeffs[0]:.2f})')
         ax2.set_xlabel('Dataset Size')
-        ax2.set_ylabel('Time (seconds)')
+        ax2.set_ylabel('Time (seconds) [Lower is Better]')
         ax2.set_title('Complexity Analysis (Log-Log Scale)')
         ax2.legend()
         ax2.grid(True)
@@ -598,7 +598,7 @@ class ProblemDemonstrator:
                            alpha=0.3)
             
             ax.set_xlabel('Round')
-            ax.set_ylabel('False Positive Rate')
+            ax.set_ylabel('False Positive Rate [Lower & Stable is Better]')
             ax.set_title(f'{dist_name.capitalize()} Distribution\n'
                         f'Variance: ±{dist_results["variance_pct"]:.1f}%')
             ax.legend()
@@ -616,7 +616,7 @@ class ProblemDemonstrator:
                   linestyle='--', label='Target FPR')
         ax.set_xticks(x_pos)
         ax.set_xticklabels(dist_names)
-        ax.set_ylabel('Mean FPR')
+        ax.set_ylabel('Mean FPR [Lower is Better]')
         ax.set_title('FPR Across Distributions')
         ax.legend()
         

@@ -522,7 +522,7 @@ class RealWorldTester:
         
         ax.set_xticks(np.arange(len(datasets)))
         ax.set_xticklabels([d[:10] for d in datasets], rotation=45)
-        ax.set_ylabel('False Positive Rate')
+        ax.set_ylabel('False Positive Rate [Lower is Better]')
         ax.set_title('FPR Across Datasets')
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.3)
@@ -544,7 +544,7 @@ class RealWorldTester:
         
         ax.set_xticks(np.arange(len(datasets)))
         ax.set_xticklabels([d[:10] for d in datasets], rotation=45)
-        ax.set_ylabel('Query Time (μs)')
+        ax.set_ylabel('Query Time (μs) [Lower is Better]')
         ax.set_title('Query Performance')
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.3)
@@ -569,7 +569,7 @@ class RealWorldTester:
         
         ax.set_xticks(np.arange(len(datasets)))
         ax.set_xticklabels([d[:10] for d in datasets], rotation=45)
-        ax.set_ylabel('Memory (KB)')
+        ax.set_ylabel('Memory (KB) [Lower is Better]')
         ax.set_title('Memory Usage')
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.3)
@@ -591,7 +591,7 @@ class RealWorldTester:
         
         ax.set_xticks(np.arange(len(datasets)))
         ax.set_xticklabels([d[:10] for d in datasets], rotation=45)
-        ax.set_ylabel('Training Time (s)')
+        ax.set_ylabel('Training Time (s) [Lower is Better]')
         ax.set_title('Training Performance')
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid(True, alpha=0.3)
