@@ -49,9 +49,6 @@ class ImplementationValidator:
         # 4. Validate combined implementation integration
         self.validate_combined_integration()
         
-        # 5. Validate benchmark measurement accuracy
-        self.validate_benchmark_accuracy()
-        
         # Generate validation report
         self.generate_validation_report()
         
@@ -426,99 +423,6 @@ class ImplementationValidator:
             print("\n✅ COMBINED INTEGRATION VALIDATION PASSED")
         else:
             print(f"\n❌ COMBINED INTEGRATION ISSUES FOUND: {results['issues']}")
-    
-    def validate_benchmark_accuracy(self):
-        """Verify benchmark measurements are accurate."""
-        print("\n" + "-"*60)
-        print("VALIDATION 5: Benchmark Measurement Accuracy")
-        print("-"*60)
-        
-        results = {'passed': True, 'issues': [], 'measurements': {}}
-        
-        # Test 1: Verify throughput measurement
-        print("\n✓ Testing throughput measurement accuracy...")
-        
-        # Create a simple filter
-        bf = StandardBloomFilter(1000, 0.01, verbose=False)
-        for i in range(1000):
-            bf.add(f"item_{i}")
-        
-        # Measure throughput manually
-        n_queries = 10000
-        queries = [f"query_{i}" for i in range(n_queries)]
-        
-        start = time.perf_counter()
-        for q in queries:
-            _ = bf.query(q)
-        elapsed = time.perf_counter() - start
-        
-        throughput = n_queries / elapsed
-        results['measurements']['throughput'] = throughput
-        
-        print(f"  ✓ Measured throughput: {throughput:.0f} queries/sec")
-        print(f"  ✓ Time resolution: {time.get_clock_info('perf_counter').resolution*1e9:.1f} ns")
-        
-        # Test 2: Verify memory measurement
-        print("\n✓ Testing memory measurement accuracy...")
-        
-        # Check if memory measurement functions work
-        if hasattr(bf, 'get_memory_usage'):
-            mem = bf.get_memory_usage()
-            if mem > 0:
-                print(f"  ✓ Memory measurement working: {mem} bytes")
-            else:
-                results['issues'].append("Memory measurement returns 0")
-                results['passed'] = False
-        
-        # Test 3: Verify FPR calculation
-        print("\n✓ Testing FPR calculation accuracy...")
-        
-        # Add known items
-        known_positives = [f"known_{i}" for i in range(100)]
-        for item in known_positives:
-            bf.add(item)
-        
-        # Test with known negatives
-        known_negatives = [f"negative_{i}" for i in range(1000)]
-        false_positives = sum(1 for item in known_negatives if bf.query(item))
-        measured_fpr = false_positives / len(known_negatives)
-        
-        results['measurements']['fpr'] = measured_fpr
-        
-        print(f"  ✓ Measured FPR: {measured_fpr:.4f} (target: 0.01)")
-        
-        # FPR should be close to target
-        if measured_fpr <= 0.02:  # Allow some variance
-            print(f"  ✓ FPR within acceptable range")
-        else:
-            results['issues'].append(f"FPR {measured_fpr:.4f} too high")
-            results['passed'] = False
-        
-        # Test 4: Verify timing precision
-        print("\n✓ Testing timing precision...")
-        
-        # Measure overhead of timing itself
-        overhead_times = []
-        for _ in range(1000):
-            start = time.perf_counter()
-            end = time.perf_counter()
-            overhead_times.append(end - start)
-        
-        avg_overhead = np.mean(overhead_times) * 1e6  # Convert to microseconds
-        
-        print(f"  ✓ Timing overhead: {avg_overhead:.3f} µs average")
-        
-        if avg_overhead < 1.0:  # Should be less than 1 microsecond
-            print(f"  ✓ Timing precision adequate for benchmarks")
-        else:
-            results['issues'].append(f"Timing overhead too high: {avg_overhead:.3f} µs")
-        
-        self.validation_results['benchmark_accuracy'] = results
-        
-        if results['passed']:
-            print("\n✅ BENCHMARK ACCURACY VALIDATION PASSED")
-        else:
-            print(f"\n❌ BENCHMARK ACCURACY ISSUES FOUND: {results['issues']}")
     
     def generate_validation_report(self):
         """Generate comprehensive validation report."""

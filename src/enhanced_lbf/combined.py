@@ -36,6 +36,8 @@ class CombinedEnhancedLBF:
     def __init__(self,
                  initial_positive_set: Optional[List[Any]] = None,
                  initial_negative_set: Optional[List[Any]] = None,
+                 positive_set: Optional[List[Any]] = None,
+                 negative_set: Optional[List[Any]] = None,
                  target_fpr: float = 0.01,
                  n_blocks: int = 1024,
                  window_size: int = 10000,
@@ -48,6 +50,18 @@ class CombinedEnhancedLBF:
         """
         Initialize fixed enhanced LBF.
         """
+        if positive_set is not None:
+            if initial_positive_set:
+                initial_positive_set = list(initial_positive_set) + list(positive_set)
+            else:
+                initial_positive_set = list(positive_set)
+
+        if negative_set is not None:
+            if initial_negative_set:
+                initial_negative_set = list(initial_negative_set) + list(negative_set)
+            else:
+                initial_negative_set = list(negative_set)
+
         self.target_fpr = target_fpr
         self.n_blocks = n_blocks
         self.window_size = window_size
