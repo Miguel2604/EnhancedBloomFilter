@@ -93,17 +93,23 @@ class CombinedEnhancedLBF:
             false_positive_rate=target_fpr
         )
         
-        # Backup filter for positive items (malicious URLs)
+        # Backup filter only stores items predicted as false negatives by the model
+        # Start small and grow dynamically
         self.positive_backup = StandardBloomFilter(
-            expected_elements=10000,
+            expected_elements=1000,
             false_positive_rate=target_fpr
         )
+        self._backup_items: List[Any] = []
         
-        # Add initial positive set to both filters
+        # Add initial positive set: always to primary; to backup only if model routes below threshold
         if initial_positive_set:
             for item in initial_positive_set:
                 self.primary_filter.add(item)
-                self.positive_backup.add(item)
+                # Evaluate current model BEFORE any updates (already trained in _init_model)
+                feats = self._extract_url_features(item)
+                prob = self._predict_proba(feats)
+                if prob < self.threshold:
+                    self._add_to_backup(item)
         
         if verbose:
             self._print_config()
@@ -157,9 +163,9 @@ class CombinedEnhancedLBF:
             # PID controller
             self.pid = PIDController(
                 target=self.target_fpr,
-                Kp=1.0,  # Less aggressive
-                Ki=0.2,
-                Kd=0.05
+                Kp=2.0,
+                Ki=0.5,
+                Kd=0.1
             )
             
             # Monitoring
@@ -175,10 +181,14 @@ class CombinedEnhancedLBF:
         """Add item with proper training."""
         self.total_updates += 1
         
-        # Add positive items to both filters
+        # For positives, always add to primary; add to backup only if model routes below threshold BEFORE update
+        features = self._extract_url_features(item)
+        pre_update_prob = self._predict_proba(features)
+        
         if label == 1:
             self.primary_filter.add(item)
-            self.positive_backup.add(item)
+            if pre_update_prob < self.threshold:
+                self._add_to_backup(item)
         
         # Incremental learning
         if self.incremental_enabled:
@@ -189,16 +199,12 @@ class CombinedEnhancedLBF:
             self.learning_rate *= self.lr_decay
             self.learning_rate = max(0.01, self.learning_rate)
         
-        # Extract URL-specific features
-        features = self._extract_url_features(item)
-        
         # Online model update with proper learning
         lr = self.learning_rate if self.incremental_enabled else 0.1
         self.model.partial_fit(features, label, learning_rate=lr)
         
-        # Update cache blocks if enabled
-        if self.cache_opt_enabled and label == 1:
-            self._update_cache_block(item)
+        # Cache block updated only if the item is maintained in backup
+        # (handled in _add_to_backup)
     
     def query(self, item: Any, ground_truth: Optional[bool] = None) -> bool:
         """Query with improved discrimination."""
@@ -214,8 +220,17 @@ class CombinedEnhancedLBF:
             # High probability - check primary filter
             result = self.primary_filter.query(item)
         else:
-            # Low probability - check backup filter
-            result = self.positive_backup.query(item)
+            # Low probability - try cache short-circuit, then backup filter
+            if self.cache_opt_enabled and self.cache_blocks is not None:
+                block = self._get_cache_block(item)
+                if block.check_backup_bit(item):
+                    self.cache_hits += 1
+                    result = True
+                else:
+                    self.cache_misses += 1
+                    result = self.positive_backup.query(item)
+            else:
+                result = self.positive_backup.query(item)
         
         # Track for adaptive control
         if self.adaptive_enabled and ground_truth is not None:
@@ -310,9 +325,40 @@ class CombinedEnhancedLBF:
         if not self.cache_opt_enabled:
             return
         
-        block_id = abs(hash(str(item))) % self.n_blocks
-        block = self.cache_blocks[block_id]
+        block = self._get_cache_block(item)
         block.add_to_backup(item)
+
+    def _get_cache_block(self, item: Any):
+        block_id = abs(hash(str(item))) % self.n_blocks
+        return self.cache_blocks[block_id]
+
+    def _predict_proba(self, features: np.ndarray) -> float:
+        score = self.model.predict(features)
+        return float(1.0 / (1.0 + np.exp(-score)))
+
+    def _add_to_backup(self, item: Any):
+        """Add item to backup filter with dynamic resizing and cache bit update."""
+        self.positive_backup.add(item)
+        self._backup_items.append(item)
+        # Update cache block bit for fast path
+        if self.cache_opt_enabled and self.cache_blocks is not None:
+            self._update_cache_block(item)
+        # Grow backup filter as needed (keep load factor reasonable)
+        self._maybe_resize_backup()
+
+    def _maybe_resize_backup(self):
+        try:
+            load = self.positive_backup.get_load_factor()
+        except Exception:
+            # If method not available, skip
+            return
+        if load <= 0.5:
+            return
+        new_capacity = max(self.positive_backup.count * 2, 1)
+        new_filter = StandardBloomFilter(expected_elements=new_capacity, false_positive_rate=self.target_fpr)
+        for it in self._backup_items:
+            new_filter.add(it)
+        self.positive_backup = new_filter
     
     def get_stats(self) -> Dict:
         """Get comprehensive statistics."""

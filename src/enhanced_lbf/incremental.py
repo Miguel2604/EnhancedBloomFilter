@@ -27,7 +27,7 @@ class PassiveAggressiveClassifier:
     Updates only when there's a prediction error.
     """
     
-    def __init__(self, C: float = 1.0, n_features: int = 15):
+    def __init__(self, C: float = 1.0, n_features: int = 20):
         """
         Initialize PA classifier.
         
@@ -154,7 +154,7 @@ class IncrementalLBF:
         self.verbose = verbose
         
         # Online learning model
-        self.model = PassiveAggressiveClassifier(C=1.0, n_features=15)
+        self.model = PassiveAggressiveClassifier(C=1.0, n_features=20)
         
         # Sliding window for recent items
         self.sliding_window = deque(maxlen=window_size)
@@ -290,24 +290,37 @@ class IncrementalLBF:
             self.add(item, label)
     
     def _extract_features(self, item: Any) -> np.ndarray:
-        """Extract features from item."""
-        item_str = str(item)
-        features = np.zeros(15, dtype=np.float32)
+        """Extract 20 URL/structural features."""
+        item_str = str(item).lower()
+        features = np.zeros(20, dtype=np.float32)
         
-        # Basic features
-        features[0] = len(item_str)
-        features[1] = ord(item_str[0]) if item_str else 0
-        features[2] = ord(item_str[-1]) if item_str else 0
+        # Basic length and counts (normalized)
+        features[0] = len(item_str) / 100.0
+        features[1] = item_str.count('/') / 10.0
+        features[2] = item_str.count('.') / 10.0
+        features[3] = item_str.count('-') / 10.0
+        features[4] = item_str.count('_') / 10.0
         
-        # Character statistics
-        features[3] = sum(c.isdigit() for c in item_str)
-        features[4] = sum(c.isalpha() for c in item_str)
-        features[5] = sum(c.isspace() for c in item_str)
+        # Keyword indicators
+        features[5] = 1.0 if 'malware' in item_str else 0.0
+        features[6] = 1.0 if 'virus' in item_str else 0.0
+        features[7] = 1.0 if 'trojan' in item_str else 0.0
+        features[8] = 1.0 if 'phishing' in item_str else 0.0
+        features[9] = 1.0 if 'hack' in item_str else 0.0
         
-        # Hash features
-        hash_val = hash(item_str)
-        for i in range(6, 15):
-            features[i] = ((hash_val >> (i * 8)) & 0xFF) / 255.0
+        # Benign indicators
+        features[10] = 1.0 if 'google' in item_str else 0.0
+        features[11] = 1.0 if 'amazon' in item_str else 0.0
+        features[12] = 1.0 if 'microsoft' in item_str else 0.0
+        features[13] = 1.0 if 'github' in item_str else 0.0
+        features[14] = 1.0 if 'wikipedia' in item_str else 0.0
+        
+        # Structural / digits
+        features[15] = 1.0 if item_str.startswith('https') else 0.0
+        features[16] = 1.0 if '.com' in item_str else 0.0
+        features[17] = 1.0 if '.org' in item_str else 0.0
+        features[18] = sum(c.isdigit() for c in item_str) / 20.0
+        features[19] = 1.0 if '.php' in item_str else 0.0
         
         return features
     
