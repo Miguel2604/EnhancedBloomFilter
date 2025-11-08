@@ -1,0 +1,133 @@
+{
+  "static_workload": {
+    "Enhanced LBF": {
+      "construction_time_sec": 0.13155698776245117,
+      "query_throughput_ops_per_sec": 218092.1511291993,
+      "query_latency_mean_ms": 0.004585217738567735,
+      "query_latency_p50_ms": 0.004518000423558988,
+      "query_latency_p95_ms": 0.005077000423625577,
+      "query_latency_p99_ms": 0.005904010313315668,
+      "false_positive_rate": 0.0,
+      "false_negative_rate_train": 0.0,
+      "false_negative_rate_test": 1.0,
+      "memory_bytes": 1048576,
+      "memory_kb": 1024.0,
+      "memory_mb": 1.0,
+      "stats": {
+        "total_queries": 56100,
+        "total_updates": 0,
+        "cache_hit_rate": 0.0,
+        "current_threshold": 0.7,
+        "features_enabled": {
+          "cache_optimization": true,
+          "incremental_learning": true,
+          "adaptive_threshold": true
+        },
+        "window_size": 0,
+        "reservoir_size": 0,
+        "learning_rate": 0.1
+      }
+    },
+    "Adaptive LBF (Ada-BF)": {
+      "construction_time_sec": 0.09210205078125,
+      "query_throughput_ops_per_sec": 13024.949570104161,
+      "query_latency_mean_ms": 0.07677572912030882,
+      "query_latency_p50_ms": 0.07610300008309423,
+      "query_latency_p95_ms": 0.08294205044876435,
+      "query_latency_p99_ms": 0.09085127919206576,
+      "false_positive_rate": 0.0,
+      "false_negative_rate_train": 0.0,
+      "false_negative_rate_test": 0.99,
+      "memory_bytes": 6262,
+      "memory_kb": 6.115234375,
+      "memory_mb": 0.0059719085693359375,
+      "stats": {
+        "total_queries": 56100,
+        "model_rejections": 0,
+        "backup_queries": 56100,
+        "memory_bytes": 6262,
+        "memory_kb": 6.115234375,
+        "positive_count": 5000,
+        "n_regions": 10
+      }
+    },
+    "Partitioned LBF (PLBF)": {
+      "construction_time_sec": 0.08553934097290039,
+      "query_throughput_ops_per_sec": 10074.996894488822,
+      "query_latency_mean_ms": 0.09925561372103403,
+      "query_latency_p50_ms": 0.09859399960987503,
+      "query_latency_p95_ms": 0.10633900001266738,
+      "query_latency_p99_ms": 0.1172351902823721,
+      "false_positive_rate": 0.0182,
+      "false_negative_rate_train": 0.0,
+      "false_negative_rate_test": 0.98,
+      "memory_bytes": 5743,
+      "memory_kb": 5.6083984375,
+      "memory_mb": 0.005476951599121094,
+      "stats": {
+        "total_queries": 56100,
+        "model_predictions": 56100,
+        "backup_queries": 56100,
+        "memory_bytes": 5743,
+        "memory_kb": 5.6083984375,
+        "positive_count": 5000,
+        "n_partitions": 8,
+        "partition_sizes": [
+          625,
+          625,
+          625,
+          625,
+          625,
+          625,
+          625,
+          625
+        ]
+      }
+    },
+    "Stable LBF (s-SLBF)": {
+      "construction_time_sec": 0.03811359405517578,
+      "query_throughput_ops_per_sec": 13861.30489183542,
+      "query_latency_mean_ms": 0.07214328000165551,
+      "query_latency_p50_ms": 0.07162899964896496,
+      "query_latency_p95_ms": 0.08005500058061443,
+      "query_latency_p99_ms": 0.0847070104919112,
+      "false_positive_rate": 0.0088,
+      "false_negative_rate_train": 0.0,
+      "false_negative_rate_test": 0.98,
+      "memory_bytes": 7476,
+      "memory_kb": 7.30078125,
+      "memory_mb": 0.007129669189453125,
+      "stats": {
+        "total_queries": 56100,
+        "total_insertions": 0,
+        "model_rejections": 29736,
+        "backup_queries": 25279,
+        "retrain_count": 0,
+        "insertions_since_retrain": 0,
+        "memory_bytes": 7476,
+        "memory_kb": 7.30078125,
+        "positive_count": 5000
+      }
+    }
+  },
+  "dynamic_workload": {
+    "Enhanced LBF": {
+      "update_throughput_ops_per_sec": 140395.05521040174,
+      "update_latency_mean_ms": 0.007122757981051109,
+      "query_throughput_after_updates": 223982.25801035055,
+      "initial_fpr": 0.0,
+      "final_fpr": 0.0,
+      "fpr_variance_percent": 0,
+      "total_insertions": 1000
+    },
+    "Stable LBF (s-SLBF)": {
+      "update_throughput_ops_per_sec": 19554.769570130353,
+      "update_latency_mean_ms": 0.051138419014023384,
+      "query_throughput_after_updates": 14151.363661462992,
+      "initial_fpr": 0.018,
+      "final_fpr": 0.046,
+      "fpr_variance_percent": 155.55555555555557,
+      "total_insertions": 1000
+    }
+  }
+}
