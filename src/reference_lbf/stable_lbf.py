@@ -154,38 +154,32 @@ class StableLearnedBloomFilter:
         """
         Initialize backup filters.
         
-        For s-SLBF, we use two tiers:
-        1. Main backup for all positives
-        2. Overflow backup for new insertions
+        For s-SLBF, we use a single backup filter that gets rebuilt periodically.
+        According to the paper, the key is to rebuild the backup to prevent FPR degradation.
         """
-        # Main backup filter
-        self.main_backup = StandardBloomFilter(
-            expected_elements=max(len(positive_set), 100),
+        # Single backup filter - will be rebuilt during retraining
+        # Size it for initial training set + some growth room
+        expected_size = max(len(positive_set), 100)
+        
+        self.backup_filter = StandardBloomFilter(
+            expected_elements=expected_size,
             false_positive_rate=self.target_fpr
         )
         for item in positive_set:
-            self.main_backup.add(item)
-        
-        # Overflow backup starts small and can be rebuilt
-        self.overflow_backup = StandardBloomFilter(
-            expected_elements=self.retrain_threshold,
-            false_positive_rate=self.target_fpr
-        )
+            self.backup_filter.add(item)
     
     def add(self, item: Any):
         """
         Add an item to the filter.
         
         This is the key operation for streaming - must maintain stability.
+        Key insight: We rebuild the backup filter during retraining to prevent FPR degradation.
         """
         self.total_insertions += 1
         self.insertions_since_retrain += 1
         
-        # Add to main backup (it can grow)
-        self.main_backup.add(item)
-        
-        # Add to overflow backup
-        self.overflow_backup.add(item)
+        # Add to backup filter (temporary until next rebuild)
+        self.backup_filter.add(item)
         
         # Update positive set and buffer
         self.positive_set.add(item)
@@ -197,9 +191,9 @@ class StableLearnedBloomFilter:
     
     def _retrain(self):
         """
-        Retrain the model with recent data and rebuild overflow backup.
+        Retrain the model with recent data and rebuild backup filter.
         
-        This is what keeps the filter "stable" for streams.
+        This is THE KEY to stability - we rebuild the backup filter to prevent FPR degradation.
         """
         if self.verbose:
             print(f"Retraining model (retrain #{self.retrain_count + 1})...")
@@ -220,11 +214,17 @@ class StableLearnedBloomFilter:
         
         self._train_model(positive_samples, negative_samples)
         
-        # Rebuild overflow backup
-        self.overflow_backup = StandardBloomFilter(
-            expected_elements=self.retrain_threshold,
+        # CRITICAL: Rebuild backup filter from scratch with all recent positives
+        # This prevents FPR degradation from overloading
+        expected_size = len(self.recent_positives)
+        self.backup_filter = StandardBloomFilter(
+            expected_elements=max(expected_size, self.retrain_threshold),
             false_positive_rate=self.target_fpr
         )
+        
+        # Add all recent positives to fresh backup
+        for item in self.recent_positives:
+            self.backup_filter.add(item)
         
         # Reset counter
         self.insertions_since_retrain = 0
@@ -238,18 +238,14 @@ class StableLearnedBloomFilter:
         """
         self.total_queries += 1
         
-        # For Stable LBF, we prioritize backup filters over model to avoid false negatives
+        # For Stable LBF, we prioritize backup filter to avoid false negatives
         # This is key for stream stability
         
-        # Check main backup first
-        if self.main_backup.query(item):
+        # Check backup filter first
+        if self.backup_filter.query(item):
             return True
         
-        # Check overflow backup
-        if self.overflow_backup.query(item):
-            return True
-        
-        # If not in backups, use model as final check
+        # If not in backup, use model as final check
         features = self._extract_features(item)
         features_scaled = self.scaler.transform(features.reshape(1, -1))
         prediction = self.model.predict(features_scaled)[0]
@@ -276,8 +272,7 @@ class StableLearnedBloomFilter:
     def get_memory_usage(self) -> int:
         """Get total memory usage in bytes."""
         total = self._estimate_model_size()
-        total += self.main_backup.m // 8
-        total += self.overflow_backup.m // 8
+        total += self.backup_filter.m // 8
         return total
     
     def get_stats(self) -> dict:

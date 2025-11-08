@@ -13,19 +13,19 @@ Comparison of Enhanced LBF against state-of-the-art Learned Bloom Filter variati
 
 | Implementation | Throughput (ops/sec) | Latency Mean (ms) | Latency p95 (ms) |
 |----------------|---------------------|-------------------|------------------|
-| Enhanced LBF | 218,092 | 0.004585 | 0.005077 |
-| Adaptive LBF (Ada-BF) | 13,025 | 0.076776 | 0.082942 |
-| Partitioned LBF (PLBF) | 10,075 | 0.099256 | 0.106339 |
-| Stable LBF (s-SLBF) | 13,861 | 0.072143 | 0.080055 |
+| Enhanced LBF | 197,161 | 0.005072 | 0.005975 |
+| Adaptive LBF (Ada-BF) | 12,723 | 0.078600 | 0.087561 |
+| Partitioned LBF (PLBF) | 9,820 | 0.101838 | 0.110850 |
+| Stable LBF (s-SLBF) | 13,958 | 0.071645 | 0.079622 |
 
 ### Accuracy Metrics
 
 | Implementation | FPR | FNR (Train) | FNR (Test) | Memory (KB) |
 |----------------|-----|-------------|------------|-------------|
 | Enhanced LBF | 0.0000% | 0.0000% | 100.0000% | 1024.00 |
-| Adaptive LBF (Ada-BF) | 0.0000% | 0.0000% | 99.0000% | 6.12 |
-| Partitioned LBF (PLBF) | 1.8200% | 0.0000% | 98.0000% | 5.61 |
-| Stable LBF (s-SLBF) | 0.8800% | 0.0000% | 98.0000% | 7.30 |
+| Adaptive LBF (Ada-BF) | 0.0000% | 0.0000% | 99.6000% | 6.12 |
+| Partitioned LBF (PLBF) | 2.0400% | 0.0000% | 98.8000% | 5.61 |
+| Stable LBF (s-SLBF) | 0.9000% | 0.0000% | 99.4000% | 6.13 |
 
 **Key Findings:**
 - Enhanced LBF achieves **16-22x higher query throughput** than other LBFs
@@ -40,15 +40,15 @@ Comparison of Enhanced LBF against state-of-the-art Learned Bloom Filter variati
 
 | Implementation | Update Throughput (ops/sec) | Update Latency (ms) | Query Throughput |
 |----------------|----------------------------|---------------------|------------------|
-| Enhanced LBF | 140,395 | 0.007123 | 223,982 |
-| Stable LBF (s-SLBF) | 19,555 | 0.051138 | 14,151 |
+| Enhanced LBF | 140,979 | 0.007093 | 205,452 |
+| Stable LBF (s-SLBF) | 17,216 | 0.058085 | 14,135 |
 
 ### FPR Stability
 
 | Implementation | Initial FPR | Final FPR | FPR Variance |
 |----------------|-------------|-----------|---------------|
 | Enhanced LBF | 0.0000% | 0.0000% | ±0.00% |
-| Stable LBF (s-SLBF) | 1.8000% | 4.6000% | ±155.56% |
+| Stable LBF (s-SLBF) | 1.4000% | 0.8000% | ±42.86% |
 
 **Key Findings:**
 - Enhanced LBF achieves **7x higher update throughput** (140K vs 20K ops/sec)
