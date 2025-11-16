@@ -17,6 +17,7 @@ This project implements an enhanced version of Learned Bloom Filters (LBF) that 
 - **[Comparative Analysis](docs/COMPARATIVE_ANALYSIS.md)** - Comparison with 6 other filters
 - **[Methodology](docs/METHODOLOGY.md)** - Testing approach and validation
 - **[Testing Fix Summary](docs/testing/TESTING_FIX_SUMMARY.md)** - Data leakage fix details
+ - **[Enhanced LBF Real-World LBF Comparison](docs/ENHANCED_LBF_REALWORLD_BENCHMARK_SUMMARY.md)** - Real URL dataset benchmarks vs Ada-BF, PLBF, and Stable LBF
 
 ## 📊 Key Features
 
@@ -232,6 +233,7 @@ Results will be saved to `data/results/` with detailed performance metrics.
 3. **Adaptive control stabilizes FPR** - ±10% variance vs ±800% in basic LBF
 4. **Trade-offs are real** - 12x throughput penalty for superior accuracy
 5. **Methodology matters** - Fixed data leakage issue in testing (see [docs/METHODOLOGY.md](docs/METHODOLOGY.md))
+6. **LBF vs LBF (real-world URL benchmark)** - Enhanced LBF is ~2–3× faster than Ada-BF, PLBF, and Stable LBF on a real URL blacklist static workload at similar FPR (~2%), while Stable LBF remains the most FPR-stable option under continuous insertions (see [docs/ENHANCED_LBF_REALWORLD_BENCHMARK_SUMMARY.md](docs/ENHANCED_LBF_REALWORLD_BENCHMARK_SUMMARY.md))
 
 ## ⚠️ Important Note on Testing
 
