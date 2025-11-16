@@ -865,6 +865,13 @@ class RealWorldComparativeAnalyzer:
         start = time.perf_counter()
         for item in remaining_items:
             lbf.add(item, label=1)
+
+        # Stream a small batch of negatives as explicit non-members so the
+        # incremental learner sees both classes under the real workload.
+        negative_stream = train_negative[train_negative_size:train_negative_size + 500]
+        for item in negative_stream:
+            lbf.add(item, label=0)
+
         insert_time = time.perf_counter() - start
         
         # Test queries on UNSEEN test set
@@ -881,11 +888,17 @@ class RealWorldComparativeAnalyzer:
         
         total_queries = len(query_positives) + len(query_negatives)
         
+        # Derive memory from implementation instead of using a fixed estimate
+        mem_bytes = 0
+        mem = stats.get('memory_usage', {})
+        if isinstance(mem, dict):
+            mem_bytes = mem.get('total_bytes', 0)
+
         return {
             'insert_time': insert_time,
             'query_time': query_time,
             'fpr': fp / len(query_negatives) if query_negatives else 0,
-            'memory_mb': 10.0,  # Estimated
+            'memory_mb': mem_bytes / (1024 * 1024) if mem_bytes > 0 else 0.0,
             'throughput': total_queries / query_time if query_time > 0 else 0,
             'true_positive_rate': tp / len(query_positives) if query_positives else 0,
             'cache_hit_rate': stats.get('cache_hit_rate', 0),

@@ -20,12 +20,12 @@
   },
   "zero_shot": {
     "generalization_score": 0.5,
-    "validated": "False"
+    "validated": false
   },
   "continuous_learning": {
-    "enhanced_avg": 0.95,
+    "enhanced_avg": 0.5,
     "cuckoo_avg": 0.5,
-    "learning_rate": 0.02727272727272731,
-    "validated": "True"
+    "learning_rate": 4.603475538893116e-17,
+    "validated": "False"
   }
 }

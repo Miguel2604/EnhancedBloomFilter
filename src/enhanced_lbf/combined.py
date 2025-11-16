@@ -121,7 +121,7 @@ class CombinedEnhancedLBF:
         
         if positive_set and negative_set:
             # Train on initial data with multiple passes for better convergence
-            for _ in range(3):  # Multiple epochs
+            for _ in range(5):  # Multiple epochs
                 # Train on positive examples
                 for item in positive_set:
                     features = self._extract_url_features(item)
@@ -215,12 +215,14 @@ class CombinedEnhancedLBF:
         score = self.model.predict(features)
         probability = 1 / (1 + np.exp(-score))
         
-        # Route based on probability and verify with actual filters
+        # High model confidence: treat as potential member even if not
+        # explicitly inserted. This improves detection on unseen positives
+        # while still allowing Bloom-style false positives.
         if probability >= self.threshold:
-            # High probability - check primary filter
-            result = self.primary_filter.query(item)
+            result = True
         else:
-            # Low probability - try cache short-circuit, then backup filter
+            # Low confidence: rely on backup filter (and cache) to recover
+            # positives the model routes below the threshold.
             if self.cache_opt_enabled and self.cache_blocks is not None:
                 block = self._get_cache_block(item)
                 if block.check_backup_bit(item):
@@ -247,39 +249,71 @@ class CombinedEnhancedLBF:
         return result
     
     def _extract_url_features(self, item: Any) -> np.ndarray:
-        """Extract URL-specific features for better discrimination."""
-        item_str = str(item).lower()
+        """Extract generic string features with URL- and pattern-aware signals.
+
+        Must return exactly 20 features.
+        """
+        s = str(item)
+        s_lower = s.lower()
         features = np.zeros(20, dtype=np.float32)
-        
-        # Basic features
-        features[0] = len(item_str) / 100.0
-        features[1] = item_str.count('/') / 10.0
-        features[2] = item_str.count('.') / 10.0
-        features[3] = item_str.count('-') / 10.0
-        features[4] = item_str.count('_') / 10.0
-        
-        # URL-specific features
-        features[5] = 1.0 if 'malware' in item_str else 0.0
-        features[6] = 1.0 if 'virus' in item_str else 0.0
-        features[7] = 1.0 if 'trojan' in item_str else 0.0
-        features[8] = 1.0 if 'phishing' in item_str else 0.0
-        features[9] = 1.0 if 'hack' in item_str else 0.0
-        
-        # Benign indicators
-        features[10] = 1.0 if 'google' in item_str else 0.0
-        features[11] = 1.0 if 'amazon' in item_str else 0.0
-        features[12] = 1.0 if 'microsoft' in item_str else 0.0
-        features[13] = 1.0 if 'github' in item_str else 0.0
-        features[14] = 1.0 if 'wikipedia' in item_str else 0.0
-        
-        # Structural features
-        features[15] = 1.0 if item_str.startswith('https') else 0.0
-        features[16] = 1.0 if '.com' in item_str else 0.0
-        features[17] = 1.0 if '.org' in item_str else 0.0
-        features[18] = sum(c.isdigit() for c in item_str) / 20.0
-        features[19] = 1.0 if '.php' in item_str else 0.0
-        
-        return features
+
+        # 0. Normalized length
+        L = max(1, len(s))
+        features[0] = L / 100.0
+
+        # 1-4. Normalized hash-based features (generic, work for any string)
+        for idx, h in enumerate((hashlib.md5, hashlib.sha1, hashlib.sha256, hashlib.sha512), start=1):
+            hv = int(h(s.encode("utf-8", errors="ignore")).hexdigest()[:8], 16)
+            features[idx] = (hv % 65536) / 65536.0
+
+        # Character category ratios
+        digits = sum(c.isdigit() for c in s)
+        alphas = sum(c.isalpha() for c in s)
+        others = L - digits - alphas
+        features[5] = digits / float(L)
+        features[6] = alphas / float(L)
+        features[7] = max(0.0, others) / float(L)
+
+        # 8. Suspicious token indicator count (URLs, malware names)
+        suspicious_tokens = ["malware", "phishing", "virus", "trojan", "hack"]
+        features[8] = sum(1.0 for t in suspicious_tokens if t in s_lower) / len(suspicious_tokens)
+
+        # 9. Suspicious TLD / pattern (.ru, .cn, IP-like, etc.)
+        tld_bad = any(t in s_lower for t in [".ru", ".cn", ".xyz", ".top"])
+        looks_like_ip = all(part.isdigit() and 0 <= int(part) <= 255 for part in s.split(".") if part.isdigit()) and s.count(".") == 3
+        features[9] = 1.0 if (tld_bad or looks_like_ip) else 0.0
+
+        # 10. Benign brand tokens (helps distinguish common sites)
+        benign_tokens = ["google", "amazon", "microsoft", "github", "wikipedia"]
+        features[10] = sum(1.0 for t in benign_tokens if t in s_lower) / len(benign_tokens)
+
+        # 11-14. Structural URL-ish features (but still defined for generic strings)
+        features[11] = 1.0 if s_lower.startswith("https://") else 0.0
+        features[12] = s.count("/") / 10.0
+        features[13] = s.count(".") / 10.0
+        features[14] = s.count("-") / 10.0
+
+        # 15-17. Character code statistics (generic)
+        codes = [ord(c) for c in s]
+        if codes:
+            features[15] = np.mean(codes) / 128.0
+            features[16] = np.std(codes) / 64.0
+            features[17] = len(set(codes)) / float(L)
+        else:
+            features[15] = features[16] = features[17] = 0.0
+
+        # 18. DNA-like pattern indicator (for genomic k-mers)
+        if L > 0 and all(c in "ACGTacgt" for c in s):
+            features[18] = 1.0
+        else:
+            features[18] = 0.0
+
+        # 19. Key-like pattern indicator (database/cache keys, hex IDs, etc.)
+        looks_hex = all(c in "0123456789abcdefABCDEF" for c in s if not c.isspace()) and L > 8
+        has_delims = any(ch in s for ch in [":", "_", "-"])
+        features[19] = 1.0 if (looks_hex or has_delims) else 0.0
+
+        return features.astype(np.float32)
     
     def _adjust_threshold(self):
         """Adjust threshold using PID control."""
@@ -360,10 +394,58 @@ class CombinedEnhancedLBF:
             new_filter.add(it)
         self.positive_backup = new_filter
     
+    def get_cache_stats(self) -> Dict:
+        """Get cache performance statistics for the combined filter."""
+        if not self.cache_opt_enabled or self.cache_blocks is None:
+            return {
+                'query_count': self.total_queries,
+                'cache_hits': 0,
+                'cache_misses': 0,
+                'cache_hit_rate': 0.0,
+                'blocks': 0
+            }
+        total = self.cache_hits + self.cache_misses
+        hit_rate = (self.cache_hits / max(1, total)) * 100
+        return {
+            'query_count': self.total_queries,
+            'cache_hits': self.cache_hits,
+            'cache_misses': self.cache_misses,
+            'cache_hit_rate': hit_rate,
+            'blocks': self.n_blocks
+        }
+    
+    def get_memory_usage(self) -> Dict:
+        """Estimate memory usage of model, filters, and cache blocks."""
+        # Model (weights + bias)
+        model_bytes = 0
+        if hasattr(self.model, 'weights'):
+            model_bytes += self.model.weights.nbytes
+        if hasattr(self.model, 'bias'):
+            model_bytes += np.array(self.model.bias, dtype=np.float32).nbytes
+        
+        # Primary and backup filters
+        primary_bytes = self.primary_filter.get_memory_usage() if hasattr(self.primary_filter, 'get_memory_usage') else 0
+        backup_bytes = self.positive_backup.get_memory_usage() if hasattr(self.positive_backup, 'get_memory_usage') else 0
+        
+        # Cache-aligned blocks
+        cache_bytes = 0
+        if self.cache_opt_enabled and self.cache_blocks is not None:
+            cache_bytes = len(self.cache_blocks) * 64  # 64 bytes per block
+        
+        total = model_bytes + primary_bytes + backup_bytes + cache_bytes
+        return {
+            'model_bytes': model_bytes,
+            'primary_filter_bytes': primary_bytes,
+            'backup_filter_bytes': backup_bytes,
+            'cache_bytes': cache_bytes,
+            'total_bytes': total
+        }
+    
     def get_stats(self) -> Dict:
         """Get comprehensive statistics."""
-        cache_hit_rate = (self.cache_hits / max(1, self.cache_hits + self.cache_misses)) * 100 if self.cache_opt_enabled else 0
-        
+        cache_stats = self.get_cache_stats()
+        cache_hit_rate = cache_stats.get('cache_hit_rate', 0.0)
+
         stats = {
             'total_queries': self.total_queries,
             'total_updates': self.total_updates,
@@ -384,6 +466,10 @@ class CombinedEnhancedLBF:
         if self.adaptive_enabled and self.fpr_history:
             stats['fpr_variance'] = np.std(self.fpr_history) / max(0.001, np.mean(self.fpr_history)) * 100
             stats['threshold_range'] = (min(self.threshold_history), max(self.threshold_history))
+        
+        # Include memory usage summary if available
+        mem = self.get_memory_usage()
+        stats['memory_usage'] = mem
         
         return stats
     

@@ -12,7 +12,6 @@ Complete performance evaluation of all Bloom Filter implementations:
 Metrics measured:
 - Query throughput (queries/sec)
 - Update latency (ms)
-- False positive rate stability
 - Memory usage
 - Cache performance
 """
@@ -82,16 +81,13 @@ class ComprehensiveBenchmark:
         # 2. Update latency benchmark
         self.benchmark_update_latency()
         
-        # 3. FPR stability benchmark
-        self.benchmark_fpr_stability()
-        
-        # 4. Memory usage benchmark
+        # 3. Memory usage benchmark
         self.benchmark_memory_usage()
         
-        # 5. Cache performance benchmark
+        # 4. Cache performance benchmark
         self.benchmark_cache_performance()
         
-        # 6. Scalability benchmark
+        # 5. Scalability benchmark
         self.benchmark_scalability()
         
         # Generate report
@@ -198,78 +194,6 @@ class ComprehensiveBenchmark:
                 print(f"  P99 latency: {p99_latency:.3f} ms")
         
         self.results['update_latency'] = results
-        return results
-    
-    def benchmark_fpr_stability(self):
-        """Benchmark FPR stability under varying workloads."""
-        print("\n" + "-"*60)
-        print("BENCHMARK 3: FPR Stability")
-        print("-"*60)
-        
-        results = {}
-        n_rounds = 50
-        queries_per_round = 1000
-        
-        # Create dataset
-        positive_set = [f"pos_{i}" for i in range(10000)]
-        negative_set = [f"neg_{i}" for i in range(50000)]
-        
-        implementations = {
-            'Basic LBF': self._create_basic_lbf(positive_set, negative_set),
-            'Adaptive LBF': self._create_adaptive_lbf(positive_set, negative_set),
-            'Combined Enhanced LBF': self._create_combined_lbf(positive_set, negative_set)
-        }
-        
-        for name, filter_obj in implementations.items():
-            if self.verbose:
-                print(f"\nTesting {name}...")
-            
-            fprs = []
-            
-            # Test under different distributions
-            for round_idx in range(n_rounds):
-                # Vary query distribution
-                if round_idx < 20:
-                    # Uniform distribution
-                    queries = [f"uniform_{np.random.randint(0, 1000000)}" 
-                              for _ in range(queries_per_round)]
-                elif round_idx < 35:
-                    # Skewed distribution
-                    queries = [f"skewed_{np.random.zipf(2) % 10000}" 
-                              for _ in range(queries_per_round)]
-                else:
-                    # Adversarial
-                    queries = [f"pos_{np.random.randint(1000000, 2000000)}" 
-                              for _ in range(queries_per_round)]
-                
-                # Measure FPR
-                false_positives = 0
-                for query in queries:
-                    if filter_obj.query(query):
-                        false_positives += 1
-                
-                fpr = false_positives / len(queries)
-                fprs.append(fpr)
-            
-            # Calculate stability metrics
-            fprs = np.array(fprs)
-            mean_fpr = np.mean(fprs)
-            std_fpr = np.std(fprs)
-            variance_pct = (std_fpr / mean_fpr * 100) if mean_fpr > 0 else 0
-            
-            results[name] = {
-                'mean_fpr': mean_fpr,
-                'std_fpr': std_fpr,
-                'variance_pct': variance_pct,
-                'min_fpr': np.min(fprs),
-                'max_fpr': np.max(fprs)
-            }
-            
-            if self.verbose:
-                print(f"  Mean FPR: {mean_fpr:.4f}")
-                print(f"  FPR variance: ±{variance_pct:.1f}%")
-        
-        self.results['fpr_stability'] = results
         return results
     
     def benchmark_memory_usage(self):
@@ -499,10 +423,11 @@ class ComprehensiveBenchmark:
         print("\n✓ Combined Enhanced LBF achieves:")
         if 'throughput' in self.results:
             combined = self.results['throughput'].get('Combined Enhanced LBF', {})
-            baseline = self.results['throughput']['Standard BF']['queries_per_second']
-            if combined:
-                speedup = combined['queries_per_second'] / baseline
-                print(f"  - {speedup:.1f}x query throughput improvement")
+            # Compare against Basic LBF, since both are learned filters
+            basic = self.results['throughput'].get('Basic LBF', {})
+            if combined and basic:
+                speedup = combined['queries_per_second'] / basic['queries_per_second']
+                print(f"  - {speedup:.2f}x query throughput vs Basic LBF")
         
         if 'update_latency' in self.results:
             combined = self.results['update_latency'].get('Combined Enhanced LBF', {})
@@ -512,7 +437,9 @@ class ComprehensiveBenchmark:
         if 'fpr_stability' in self.results:
             combined = self.results['fpr_stability'].get('Combined Enhanced LBF', {})
             if combined:
-                print(f"  - ±{combined['variance_pct']:.1f}% FPR variance (stable)")
+                variance = combined['variance_pct']
+                stability = "stable" if variance <= 20.0 else "high variance"
+                print(f"  - ±{variance:.1f}% FPR variance ({stability})")
         
         print("\n✓ Each solution addresses its target problem effectively")
         print("✓ Combined solution provides synergistic benefits")

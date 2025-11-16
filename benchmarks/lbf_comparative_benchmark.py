@@ -44,50 +44,35 @@ class LBFBenchmark:
         self.results = defaultdict(dict)
         
     def load_url_dataset(self, 
-                         malicious_file: str = "data/datasets/urlhaus_malicious_urls.txt",
-                         benign_file: str = "data/datasets/top1m_urls.txt",
+                         malicious_file: str = "data/datasets/url_blacklist/malicious_urls.txt",
+                         benign_file: str = "data/datasets/url_blacklist/benign_urls.txt",
                          n_samples: int = 10000) -> Tuple[List[str], List[str], List[str]]:
-        """
-        Load URL dataset for testing.
-        
+        """Load URL dataset for testing using prepared real-world files.
+
+        This benchmark no longer falls back to synthetic data. If the
+        expected files are missing, it will raise an error and instruct the
+        user to run the dataset downloader.
+
         Returns:
-            (train_positive, train_negative, test_positive)
+            (train_positive, train_negative, test_positive, test_negative)
         """
         print(f"\n📂 Loading URL dataset...")
-        
+
+        if not os.path.exists(malicious_file) or not os.path.exists(benign_file):
+            print(f"❌ Real-world URL dataset not found.")
+            print(f"   Expected malicious file: {malicious_file}")
+            print(f"   Expected benign file:    {benign_file}")
+            print("   Please run: python scripts/download_datasets.py")
+            raise FileNotFoundError("Real-world URL dataset files are missing")
+
         # Load malicious URLs
-        malicious_urls = []
-        try:
-            with open(malicious_file, 'r') as f:
-                malicious_urls = [line.strip() for line in f if line.strip()][:n_samples * 2]
-        except FileNotFoundError:
-            print(f"⚠️  {malicious_file} not found. Generating synthetic data...")
-            # Generate more realistic synthetic malicious URLs with variation
-            import string
-            malicious_urls = []
-            for i in range(n_samples * 2):
-                domain = ''.join(random.choices(string.ascii_lowercase, k=random.randint(8, 15)))
-                tld = random.choice(['com', 'net', 'org', 'ru', 'cn'])
-                path = ''.join(random.choices(string.ascii_lowercase + string.digits, k=random.randint(5, 20)))
-                malicious_urls.append(f"http://{domain}-malware.{tld}/{path}")
-        
+        with open(malicious_file, 'r') as f:
+            malicious_urls = [line.strip() for line in f if line.strip()][:n_samples * 2]
+
         # Load benign URLs
-        benign_urls = []
-        try:
-            with open(benign_file, 'r') as f:
-                benign_urls = [line.strip() for line in f if line.strip()][:n_samples * 2]
-        except FileNotFoundError:
-            print(f"⚠️  {benign_file} not found. Generating synthetic data...")
-            # Generate more realistic synthetic benign URLs with variation
-            import string
-            benign_urls = []
-            for i in range(n_samples * 2):
-                domain = random.choice(['google', 'facebook', 'amazon', 'microsoft', 'apple', 'twitter', 'linkedin', 'github'])
-                subdomain = ''.join(random.choices(string.ascii_lowercase, k=random.randint(3, 8)))
-                tld = random.choice(['com', 'net', 'org', 'edu'])
-                path = ''.join(random.choices(string.ascii_lowercase, k=random.randint(3, 10)))
-                benign_urls.append(f"https://{subdomain}.{domain}.{tld}/{path}")
-        
+        with open(benign_file, 'r') as f:
+            benign_urls = [line.strip() for line in f if line.strip()][:n_samples * 2]
+
         # Split into train/test
         train_positive = malicious_urls[:n_samples]
         test_positive = malicious_urls[n_samples:n_samples * 2]
@@ -211,7 +196,12 @@ class LBFBenchmark:
     def get_memory_usage(self, filter_obj: Any) -> int:
         """Get memory usage in bytes."""
         if hasattr(filter_obj, 'get_memory_usage'):
-            return filter_obj.get_memory_usage()
+            reported = filter_obj.get_memory_usage()
+            # Enhanced LBF and some implementations return a dict with
+            # a breakdown; prefer the total_bytes entry when present.
+            if isinstance(reported, dict):
+                return reported.get('total_bytes', 0)
+            return reported
         else:
             # Fallback: estimate based on common attributes
             return 1024 * 1024  # 1 MB default
