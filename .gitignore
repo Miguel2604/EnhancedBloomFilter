@@ -43,3 +43,6 @@ data/real/
 # Environment
 .env
 .venv
+
+# PDF files
+*.pdf
