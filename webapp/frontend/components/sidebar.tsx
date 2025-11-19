@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Activity, Settings } from 'lucide-react';
+import { LayoutDashboard, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -9,9 +9,7 @@ export function Sidebar() {
 
   return (
     <div className="w-20 bg-white h-screen flex flex-col items-center py-8 border-r border-gray-100 fixed left-0 top-0 z-50">
-      <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-bold text-xl mb-12 shadow-xl shadow-purple-200">
-        B
-      </div>
+
       
       <nav className="flex flex-col gap-4 w-full px-4">
         <NavItem 
@@ -28,14 +26,7 @@ export function Sidebar() {
         />
       </nav>
 
-      <div className="mt-auto flex flex-col gap-4 w-full px-4">
-        <NavItem 
-          href="/settings" 
-          icon={<Settings />} 
-          label="Settings"
-          active={pathname === "/settings"} 
-        />
-      </div>
+
     </div>
   );
 }
