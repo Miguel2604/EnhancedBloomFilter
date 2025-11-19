@@ -7,7 +7,7 @@ import { FprChart } from "@/components/charts/fpr-chart";
 import { MetricsComparison } from "@/components/charts/metrics-comparison";
 import { MetricsSummary } from "@/components/metrics-summary";
 import { useSimulation } from "@/hooks/use-simulation";
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Activity } from 'lucide-react';
 
 export default function DashboardPage() {
   const { results, isLoading, error, run } = useSimulation();
@@ -29,6 +29,23 @@ export default function DashboardPage() {
         </header>
 
         <div className="px-8 pb-12">
+          {/* Loading Overlay */}
+          {isLoading && (
+             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+               <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-300">
+                 <div className="relative w-16 h-16">
+                   <div className="absolute inset-0 border-4 border-gray-100 rounded-full" />
+                   <div className="absolute inset-0 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                   <Activity className="absolute inset-0 m-auto w-6 h-6 text-purple-600 animate-pulse" />
+                 </div>
+                 <div className="text-center">
+                   <h3 className="text-lg font-bold text-gray-900">Running Simulation</h3>
+                   <p className="text-sm text-gray-500">Training models and processing queries...</p>
+                 </div>
+               </div>
+             </div>
+          )}
+
           {/* Top Metrics Row */}
           {results && <MetricsSummary results={results} />}
 
@@ -104,8 +121,8 @@ export default function DashboardPage() {
                         <MetricsComparison 
                           results={results} 
                           metric="memoryBytes" 
-                          unit=" KB"
-                          formatter={(val) => (val / 1024).toFixed(1)}
+                          unit=" MB"
+                          formatter={(val) => (val / (1024 * 1024)).toFixed(2)}
                         />
                       ) : (
                         <div className="h-[200px] bg-gray-50 rounded-xl animate-pulse" />

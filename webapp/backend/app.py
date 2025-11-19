@@ -21,6 +21,240 @@ from src.enhanced_lbf.combined import CombinedEnhancedLBF
 app = Flask(__name__)
 CORS(app)
 
+
+# Global storage for demo filters
+DEMO_FILTERS = {}
+DEMO_DATA = {
+    "positive": [],
+    "negative": []
+}
+
+def get_or_create_demo_filters():
+    if DEMO_FILTERS:
+        return DEMO_FILTERS
+    
+    print("Initializing demo filters...")
+    # Create a small persistent dataset for the demo
+    # We want some recognizable domains
+    positives = [
+        "google.com", "facebook.com", "youtube.com", "twitter.com", "instagram.com",
+        "linkedin.com", "wikipedia.org", "amazon.com", "netflix.com", "reddit.com",
+        "microsoft.com", "apple.com", "github.com", "stackoverflow.com", "medium.com"
+    ]
+    # Add generic ones
+    for i in range(1000):
+        positives.append(f"safe-site-{i}.com")
+        
+    negatives = [
+        "malicious-site.com", "phishing-attempt.net", "virus-download.org",
+        "evil-corp.cn", "hack-your-bank.ru", "trojan-horse.exe", "ransomware.xyz"
+    ]
+    # Add generic ones
+    for i in range(2000):
+        negatives.append(f"bad-site-{i}.com")
+        
+    DEMO_DATA["positive"] = positives
+    DEMO_DATA["negative"] = negatives
+
+    # Initialize Standard BF
+    sbf = StandardBloomFilter(len(positives), 0.01)
+    for p in positives:
+        sbf.add(p)
+    DEMO_FILTERS['Standard BF'] = sbf
+
+    # Initialize Combined Enhanced LBF
+    # We use a lower threshold for demo visibility of the "Model Negative" path
+    lbf = CombinedEnhancedLBF(
+        positive_set=positives,
+        negative_set=negatives,
+        target_fpr=0.01,
+        enable_cache_opt=True,
+        enable_adaptive=True,
+        verbose=False
+    )
+    # Manually set threshold to 0.7 to match description, though it might adapt
+    lbf.threshold = 0.7
+    DEMO_FILTERS['Combined Enhanced LBF'] = lbf
+    
+    print("Demo filters initialized.")
+    return DEMO_FILTERS
+
+@app.route('/api/process-url', methods=['POST'])
+def process_url():
+    data = request.json
+    url = data.get('url', '')
+    filter_type = data.get('filter_type', 'Combined Enhanced LBF')
+    
+    filters = get_or_create_demo_filters()
+    filter_obj = filters.get(filter_type)
+    
+    if not filter_obj:
+        return jsonify({"error": f"Filter {filter_type} not found"}), 404
+
+    result_data = {
+        "url": url,
+        "filter_type": filter_type,
+        "steps": [],
+        "final_result": False
+    }
+    
+    if filter_type == 'Standard BF':
+        # Step 1: Hashing
+        # We can't easily get the hash values from the object without re-implementing,
+        # but we can show the concept.
+        hashes = []
+        for hf in filter_obj.hash_functions:
+            hashes.append(hf(url))
+        
+        result_data["steps"].append({
+            "stage": "Hashing",
+            "description": f"Computed {filter_obj.k} hash values",
+            "details": {"hashes": hashes[:3] + ["..."] if len(hashes) > 3 else hashes},
+            "status": "completed"
+        })
+        
+        # Step 2: Bit Array Check
+        is_present = filter_obj.query(url)
+        result_data["steps"].append({
+            "stage": "Bit Array Check",
+            "description": "Checking bits at computed indices",
+            "details": {"result": "All bits set" if is_present else "Some bits missing"},
+            "status": "completed"
+        })
+        
+        result_data["final_result"] = is_present
+
+    elif filter_type == 'Combined Enhanced LBF':
+        # Replicate logic to capture steps
+        
+        # Step 1: Feature Extraction
+        features = filter_obj._extract_url_features(url)
+        # Get top 3 prominent features for display
+        top_features = []
+        feature_names = [
+            "Length", "Hash1", "Hash2", "Hash3", "Hash4", 
+            "Digits Ratio", "Alpha Ratio", "Others Ratio",
+            "Suspicious Tokens", "Bad TLD", "Benign Brand",
+            "HTTPS", "Slashes", "Dots", "Hyphens",
+            "Char Mean", "Char Std", "Char Unique",
+            "DNA Pattern", "Hex Pattern"
+        ]
+        
+        # Just pick a few non-zero ones for display
+        for i, val in enumerate(features):
+            if val > 0:
+                top_features.append(f"{feature_names[i]}: {val:.2f}")
+            if len(top_features) >= 3:
+                break
+                
+        result_data["steps"].append({
+            "stage": "Feature Extraction",
+            "description": "Extracted 20 numerical features",
+            "details": {"features_summary": top_features},
+            "status": "completed"
+        })
+        
+        # Step 2: Model Prediction
+        score = filter_obj.model.predict(features)
+        probability = 1.0 / (1.0 + np.exp(-score))
+        threshold = filter_obj.threshold
+        
+        model_decision = "POSITIVE" if probability >= threshold else "NEGATIVE"
+        
+        result_data["steps"].append({
+            "stage": "Model Prediction",
+            "description": f"Neural Model Score: {probability:.4f}",
+            "details": {
+                "score": float(probability),
+                "threshold": float(threshold),
+                "decision": model_decision
+            },
+            "status": "completed"
+        })
+        
+        if model_decision == "POSITIVE":
+            result_data["steps"].append({
+                "stage": "Fast Path",
+                "description": "Model high confidence - accepted immediately",
+                "details": {"action": "Return True"},
+                "status": "completed"
+            })
+            result_data["final_result"] = True
+        else:
+            # Model Negative -> Check Cache/Backup
+            # Step 3: Cache Check
+            cache_hit = False
+            cache_status = "Miss (Maybe in Backup)"
+            
+            if filter_obj.cache_opt_enabled and filter_obj.cache_blocks is not None:
+                block = filter_obj._get_cache_block(url)
+                backup_bit_set = block.check_backup_bit(url)
+                
+                if not backup_bit_set:
+                    cache_status = "Hit (Definitely NOT in Backup)"
+                    cache_hit = True
+                
+                result_data["steps"].append({
+                    "stage": "Cache Check",
+                    "description": f"Checking L3 Cache Block {block.block_id}",
+                    "details": {
+                        "bit_set": bool(backup_bit_set),
+                        "conclusion": cache_status
+                    },
+                    "status": "completed"
+                })
+                
+                if not backup_bit_set:
+                    # Defined negative
+                    result_data["final_result"] = False
+                    result_data["steps"].append({
+                        "stage": "Result",
+                        "description": "Rejected by Cache",
+                        "status": "completed"
+                    })
+                    return jsonify(result_data)
+
+            # Step 4: Backup Filter
+            in_backup = filter_obj.positive_backup.query(url)
+            result_data["steps"].append({
+                "stage": "Backup Filter",
+                "description": "Checking Backup Bloom Filter",
+                "details": {"found": in_backup},
+                "status": "completed"
+            })
+            
+            result_data["final_result"] = in_backup
+
+    return jsonify(result_data)
+
+
+@app.route('/api/dataset', methods=['GET'])
+def get_dataset():
+    """Return a sample dataset for visualization."""
+    # Ensure data is initialized
+    get_or_create_demo_filters()
+    
+    items = []
+    
+    # Mix positives and negatives
+    # Take top 20 positives (recognizable)
+    for p in DEMO_DATA["positive"][:20]:
+        items.append({"url": p, "type": "safe"})
+        
+    # Take top 20 negatives (recognizable)
+    for n in DEMO_DATA["negative"][:20]:
+        items.append({"url": n, "type": "malicious"})
+        
+    # Add some random others
+    for i in range(10):
+        items.append({"url": f"user-generated-{i}.com", "type": "unknown"})
+        
+    # Shuffle to make it interesting
+    np.random.seed(int(time.time()))
+    np.random.shuffle(items)
+    
+    return jsonify({"items": items})
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok"}), 200

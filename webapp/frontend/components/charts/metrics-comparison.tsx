@@ -21,12 +21,15 @@ interface MetricsComparisonProps {
 }
 
 export function MetricsComparison({ results, metric, unit, formatter }: MetricsComparisonProps) {
+  // Ensure we have valid numbers for the chart domain
+  const maxVal = Math.max(...results.map(r => r[metric] || 0));
+  
   return (
     <div className="h-[200px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={results} layout="vertical" margin={{ top: 0, right: 80, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
-          <XAxis type="number" hide />
+          <XAxis type="number" hide domain={[0, maxVal * 1.2]} />
           <YAxis 
             dataKey="label" 
             type="category" 
