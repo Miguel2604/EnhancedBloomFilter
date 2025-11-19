@@ -22,8 +22,12 @@ interface MetricsComparisonProps {
 
 export function MetricsComparison({ results, metric, unit, formatter }: MetricsComparisonProps) {
   // Ensure we have valid numbers for the chart domain
-  const maxVal = Math.max(...results.map(r => r[metric] || 0));
+  const maxVal = results.length > 0 ? Math.max(...results.map(r => r[metric] || 0)) : 0;
   
+  // Calculate dynamic width for Y-axis based on label length (approx 7px per char)
+  const maxLabelLen = results.length > 0 ? Math.max(...results.map(r => (r.label || "").length)) : 0;
+  const yAxisWidth = Math.max(100, maxLabelLen * 7 + 20);
+
   return (
     <div className="h-[200px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -33,7 +37,7 @@ export function MetricsComparison({ results, metric, unit, formatter }: MetricsC
           <YAxis 
             dataKey="label" 
             type="category" 
-            width={100} 
+            width={yAxisWidth} 
             axisLine={false} 
             tickLine={false}
             tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 500 }}
