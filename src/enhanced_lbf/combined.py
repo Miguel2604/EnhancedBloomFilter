@@ -226,11 +226,17 @@ class CombinedEnhancedLBF:
             if self.cache_opt_enabled and self.cache_blocks is not None:
                 block = self._get_cache_block(item)
                 if block.check_backup_bit(item):
-                    self.cache_hits += 1
-                    result = True
-                else:
+                    # Bit is set: It MIGHT be in backup.
+                    # We must check the full backup filter to be sure.
+                    # This is a "partial hit" or "cache says maybe".
+                    # In terms of avoiding main memory (backup filter), we failed.
                     self.cache_misses += 1
                     result = self.positive_backup.query(item)
+                else:
+                    # Bit is NOT set: It is DEFINITELY NOT in backup.
+                    # We resolved the query using only the cache block.
+                    self.cache_hits += 1
+                    result = False
             else:
                 result = self.positive_backup.query(item)
         
