@@ -288,6 +288,37 @@ class IncrementalLBF:
         """
         for item, label in items:
             self.add(item, label)
+
+    def _estimate_collection_memory(self, collection) -> int:
+        """Estimate memory footprint for a container of (item, label) pairs."""
+        size = sys.getsizeof(collection)
+        for entry in collection:
+            size += sys.getsizeof(entry)
+            if isinstance(entry, tuple):
+                for part in entry:
+                    size += sys.getsizeof(part)
+        return size
+
+    def get_memory_usage(self) -> Dict[str, int]:
+        """Return detailed memory usage estimates for all components."""
+        model_bytes = 0
+        if hasattr(self.model, 'weights'):
+            model_bytes += self.model.weights.nbytes
+        if hasattr(self.model, 'bias'):
+            model_bytes += np.array(self.model.bias, dtype=np.float32).nbytes
+        primary_bytes = self.primary_filter.get_memory_usage() if hasattr(self.primary_filter, 'get_memory_usage') else 0
+        backup_bytes = self.backup_filter.get_memory_usage() if hasattr(self.backup_filter, 'get_memory_usage') else 0
+        window_bytes = self._estimate_collection_memory(self.sliding_window)
+        reservoir_bytes = self._estimate_collection_memory(self.reservoir)
+        total = model_bytes + primary_bytes + backup_bytes + window_bytes + reservoir_bytes
+        return {
+            'model_bytes': int(model_bytes),
+            'primary_filter_bytes': int(primary_bytes),
+            'backup_filter_bytes': int(backup_bytes),
+            'window_bytes': int(window_bytes),
+            'reservoir_bytes': int(reservoir_bytes),
+            'total_bytes': int(total)
+        }
     
     def _extract_features(self, item: Any) -> np.ndarray:
         """Extract 20 URL/structural features."""
@@ -334,7 +365,8 @@ class IncrementalLBF:
             'false_negatives': self.false_negatives_detected,
             'backup_filter_items': self.backup_filter.total_items,
             'backup_memory': self.backup_filter.get_memory_usage(),
-            'threshold': self.threshold
+            'threshold': self.threshold,
+            'memory_usage': self.get_memory_usage()
         }
     
     def adjust_threshold(self, delta: float):
