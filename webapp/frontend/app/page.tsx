@@ -8,6 +8,7 @@ import { MetricsComparison } from "@/components/charts/metrics-comparison";
 import { MetricsSummary } from "@/components/metrics-summary";
 import { useSimulation } from "@/hooks/use-simulation";
 import { MoreHorizontal, Activity } from 'lucide-react';
+import { formatThroughput } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { results, isLoading, error, run } = useSimulation();
@@ -108,7 +109,7 @@ export default function DashboardPage() {
                         <MetricsComparison 
                           results={results} 
                           metric="throughput" 
-                          formatter={(val) => `${(val / 1000000).toFixed(1)}M`}
+                          formatter={(val) => formatThroughput(val, { millionDecimals: 2, thousandDecimals: 1 })}
                         />
                       ) : (
                         <div className="h-[200px] bg-gray-50 rounded-xl animate-pulse" />

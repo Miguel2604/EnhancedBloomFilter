@@ -1,6 +1,7 @@
 import { FilterResult } from "@/types/simulation";
 import { DashboardCard } from "./ui/dashboard-card";
 import { ArrowUpRight, ArrowDownRight, Activity, Database, Zap, Clock } from 'lucide-react';
+import { formatThroughput } from "@/lib/utils";
 
 interface MetricsSummaryProps {
   results: FilterResult[];
@@ -12,6 +13,7 @@ export function MetricsSummary({ results }: MetricsSummaryProps) {
   // Find best performers
   const bestFpr = [...results].sort((a, b) => a.fpr - b.fpr)[0];
   const bestThroughput = [...results].sort((a, b) => (b.throughput || 0) - (a.throughput || 0))[0];
+  const bestThroughputValue = bestThroughput?.throughput || 0;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -37,7 +39,7 @@ export function MetricsSummary({ results }: MetricsSummaryProps) {
           <span className="text-sm font-medium">Peak Throughput</span>
         </div>
         <div className="text-3xl font-bold text-gray-900 mb-1">
-          {((bestThroughput.throughput || 0) / 1000000).toFixed(2)}M
+          {formatThroughput(bestThroughputValue)}
         </div>
         <div className="text-sm text-gray-500">ops/sec ({bestThroughput.label})</div>
         <div className="mt-4 flex items-center text-xs text-green-600 bg-green-50 w-fit px-2 py-1 rounded-full">
