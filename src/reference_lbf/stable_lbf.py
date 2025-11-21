@@ -36,6 +36,7 @@ class StableLearnedBloomFilter:
                  target_fpr: float = 0.01,
                  retrain_threshold: int = 1000,
                  buffer_size: int = 10000,
+                 retain_full_history: bool = False,
                  verbose: bool = False):
         """
         Initialize Stable LBF.
@@ -51,6 +52,7 @@ class StableLearnedBloomFilter:
         self.target_fpr = target_fpr
         self.retrain_threshold = retrain_threshold
         self.buffer_size = buffer_size
+        self.retain_full_history = retain_full_history
         self.verbose = verbose
         
         if not positive_set or not negative_set:
@@ -91,6 +93,8 @@ class StableLearnedBloomFilter:
             print(f"  Target FPR: {target_fpr:.4f}")
             print(f"  Retrain threshold: {retrain_threshold:,}")
             print(f"  Buffer size: {buffer_size:,}")
+            if retain_full_history:
+                print("  Backup retention: full history")
     
     def _extract_features(self, item: Any) -> np.ndarray:
         """Extract features from an item."""
@@ -159,13 +163,14 @@ class StableLearnedBloomFilter:
         """
         # Single backup filter - will be rebuilt during retraining
         # Size it for initial training set + some growth room
-        expected_size = max(len(positive_set), 100)
+        initial_source = self.positive_set if self.retain_full_history else positive_set
+        expected_size = max(len(initial_source), 100)
         
         self.backup_filter = StandardBloomFilter(
             expected_elements=expected_size,
             false_positive_rate=self.target_fpr
         )
-        for item in positive_set:
+        for item in initial_source:
             self.backup_filter.add(item)
     
     def add(self, item: Any):
@@ -214,16 +219,17 @@ class StableLearnedBloomFilter:
         
         self._train_model(positive_samples, negative_samples)
         
-        # CRITICAL: Rebuild backup filter from scratch with all recent positives
-        # This prevents FPR degradation from overloading
-        expected_size = len(self.recent_positives)
+        # CRITICAL: Rebuild backup filter from scratch.
+        # Optionally retain the full positive history instead of the sliding window.
+        backup_source = self.positive_set if self.retain_full_history else list(self.recent_positives)
+        expected_size = len(backup_source)
         self.backup_filter = StandardBloomFilter(
             expected_elements=max(expected_size, self.retrain_threshold),
             false_positive_rate=self.target_fpr
         )
         
-        # Add all recent positives to fresh backup
-        for item in self.recent_positives:
+        # Add positives to fresh backup
+        for item in backup_source:
             self.backup_filter.add(item)
         
         # Reset counter

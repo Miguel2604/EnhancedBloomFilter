@@ -294,13 +294,16 @@ class CacheAlignedLBF:
         features_scaled = self._scale_features(features)
         score = np.dot(self.model_weights, features_scaled) + self.model_intercept
         probability = float(self._sigmoid(score))
-        backup_hit = self.base_lbf.backup_filter.query(item)
         
         # Check threshold
         if probability >= self.base_lbf.threshold:
             return self.primary_filter.query(item)
 
-        return backup_hit
+        # Low-confidence path: consult primary filter before falling back
+        if self.primary_filter.query(item):
+            return True
+
+        return self.base_lbf.backup_filter.query(item)
     
     def batch_query(self, items: List[Any]) -> List[bool]:
         """
@@ -357,12 +360,15 @@ class CacheAlignedLBF:
         # Check thresholds
         results = []
         for item, prob in zip(chunk, probabilities):
-            backup_hit = self.base_lbf.backup_filter.query(item)
-
+            primary_hit = self.primary_filter.query(item)
             if prob >= self.base_lbf.threshold:
-                results.append(self.primary_filter.query(item))
+                results.append(primary_hit)
+                continue
+
+            if primary_hit:
+                results.append(True)
             else:
-                results.append(backup_hit)
+                results.append(self.base_lbf.backup_filter.query(item))
         
         return results
     
