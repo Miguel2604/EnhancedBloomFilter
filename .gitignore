@@ -46,3 +46,7 @@ data/real/
 
 # PDF files
 *.pdf
+
+# Docs
+docs/PROBLEMS_CITATIONS.md
+docs/research/BIBLIOGRAPHY_OLD.md

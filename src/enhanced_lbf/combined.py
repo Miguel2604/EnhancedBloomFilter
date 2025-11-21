@@ -76,6 +76,17 @@ class CombinedEnhancedLBF:
         
         # Initialize components
         self._init_model(initial_positive_set, initial_negative_set)
+        
+        # Store a sample of initial negatives for replay during online learning
+        # This prevents the model from forgetting the negative class when processing a stream of positives
+        self.negative_pool = []
+        if initial_negative_set:
+            # Keep up to 1000 negatives for replay
+            import random
+            self.negative_pool = list(initial_negative_set)
+            if len(self.negative_pool) > 1000:
+                self.negative_pool = random.sample(self.negative_pool, 1000)
+        
         self._init_cache_structure()
         self._init_incremental_learning()
         self._init_adaptive_control()
@@ -202,6 +213,14 @@ class CombinedEnhancedLBF:
         # Online model update with proper learning
         lr = self.learning_rate if self.incremental_enabled else 0.1
         self.model.partial_fit(features, label, learning_rate=lr)
+        
+        # Replay a negative sample to prevent forgetting
+        # This is crucial when the stream contains mostly positives
+        if self.negative_pool and label == 1:
+            import random
+            neg_item = random.choice(self.negative_pool)
+            neg_feats = self._extract_url_features(neg_item)
+            self.model.partial_fit(neg_feats, 0, learning_rate=lr)
         
         # Cache block updated only if the item is maintained in backup
         # (handled in _add_to_backup)
@@ -339,7 +358,8 @@ class CombinedEnhancedLBF:
         
         # Apply adjustment
         old_threshold = self.threshold
-        self.threshold = np.clip(self.threshold + adjustment, 0.3, 0.95)
+        # Invert adjustment: if FPR is high (negative error), we want to INCREASE threshold
+        self.threshold = np.clip(self.threshold - adjustment, 0.3, 0.95)
         
         # Track history
         self.threshold_history.append(self.threshold)

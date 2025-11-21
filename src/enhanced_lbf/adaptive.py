@@ -267,7 +267,8 @@ class AdaptiveLBF:
         
         # Apply adjustment
         old_threshold = self.threshold
-        self.threshold = np.clip(self.threshold + adjustment, 0.1, 0.9)
+        # Invert adjustment: if FPR is high (negative error), we want to INCREASE threshold
+        self.threshold = np.clip(self.threshold - adjustment, 0.1, 0.9)
         
         # Track adjustment
         if abs(old_threshold - self.threshold) > 0.001:
