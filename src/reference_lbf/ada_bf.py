@@ -158,8 +158,9 @@ class AdaptiveLearnedBloomFilter:
         # Create backup filter for each region
         for region_idx, items in enumerate(self.region_items):
             if items:
-                # Lower confidence regions get larger backup filters
-                region_fpr = self.target_fpr * (1 + (self.n_regions - region_idx) / self.n_regions)
+                # Lower confidence regions (where negatives are likely) need stronger filters (lower FPR)
+                # Higher confidence regions can afford weaker filters (higher FPR)
+                region_fpr = self.target_fpr * (0.5 + (1.5 * region_idx / self.n_regions))
                 bf = StandardBloomFilter(
                     expected_elements=max(len(items), 10),
                     false_positive_rate=min(region_fpr, 0.1)
