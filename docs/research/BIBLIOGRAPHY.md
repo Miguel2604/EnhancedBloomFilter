@@ -105,14 +105,20 @@ Papers providing solutions for cache locality problems:
 - **PDF**: http://tfk.mit.edu/pdf/bloom.pdf
 - **Note**: Implements blocked BF; shows fewer cache misses and higher throughput
 
-### 3. **Xor Filters: Faster and Smaller Than Bloom and Cuckoo Filters**
+### 3. **RocksDB "Full Filter" Block Format**
+- **Source**: RocksDB Wiki / Engineering Blog
+- **Year**: 2014
+- **Link**: https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter
+- **Note**: Implements "Full Filter" strategy where one filter covers a whole SST file but probe bits are cache-aligned (within one CPU cache line) to minimize misses to 1 per lookup.
+
+### 4. **Xor Filters: Faster and Smaller Than Bloom and Cuckoo Filters**
 - **Authors**: Graf & Lemire
 - **Year**: 2020
 - **Journal**: Journal of Experimental Algorithmics (JEA)
 - **arXiv**: https://arxiv.org/pdf/1912.08258
 - **Note**: Contiguous layouts improve locality and speed
 
-### 4. **Cuckoo Filter: Practically Better Than Bloom**
+### 5. **Cuckoo Filter: Practically Better Than Bloom**
 - **Authors**: Bin Fan, Dave G. Andersen, Michael Kaminsky, Michael D. Mitzenmacher
 - **Year**: 2014
 - **Conference**: CoNEXT 2014
@@ -121,7 +127,7 @@ Papers providing solutions for cache locality problems:
 - **Google Scholar**: https://scholar.google.com/scholar?cluster=14822855480453765820
 - **Note**: Faster lookups, good locality via fingerprints; strong baseline
 
-### 5. **Don't Thrash: How to Cache Your Hash on Flash**
+### 6. **Don't Thrash: How to Cache Your Hash on Flash**
 - **Authors**: Michael A. Bender, Martin Farach-Colton, Rob Johnson, et al.
 - **Year**: 2012
 - **Conference**: VLDB 2012 / PVLDB 5(12)
@@ -130,45 +136,77 @@ Papers providing solutions for cache locality problems:
 - **Google Scholar**: https://scholar.google.com/scholar?cluster=12513463335616736641
 - **Note**: Quotient filters and buffered variants with superior locality
 
-### 6. **Shift-Table: A Low-latency Learned Index using Model Correction**
+### 7. **Shift-Table: A Low-latency Learned Index using Model Correction**
 - **Authors**: Hadian & Heinis
 - **Year**: 2021
 - **Conference**: EDBT 2021
 - **PDF**: https://openproceedings.org/2021/conf/edbt/p91.pdf
 - **Note**: Learned indexes suffer cache-miss penalties; correction layer restores locality
 
-### 7. **ALEX: An Updatable Adaptive Learned Index**
+### 8. **ALEX: An Updatable Adaptive Learned Index**
 - **Authors**: Ding et al.
 - **Year**: 2020
 - **Conference**: SIGMOD 2020
 - **PDF**: https://jiayuasu.github.io/files/paper/alex-sigmod2020.pdf
 - **Note**: Design choices to reduce random memory access and keep models cache-friendly
 
-### 8. **Ribbon filter: practically smaller than Bloom and Xor**
+### 9. **Ribbon filter: practically smaller than Bloom and Xor**
 - **Authors**: Dillinger & Walzer
 - **Year**: 2022
 - **PDF**: https://users.cs.utah.edu/~pandey/courses/cs6968/papers/ribbon-filter.pdf
 - **Note**: Locality-optimized static filter; relevant for read-mostly paths
 
-### 9. **Blocked Bloom Filters with Choices**
+### 10. **Blocked Bloom Filters with Choices**
 - **Year**: 2022
 - **arXiv**: https://arxiv.org/abs/2501.18977
 
-### 10. **LSM-Trees Under (Memory) Pressure**
+### 11. **LSM-Trees Under (Memory) Pressure**
 - **Year**: 2022
 - **PDF**: https://adms-conf.org/2022-camera-ready/ADMS22_mun.pdf
 
-### 11. **Reducing Bloom Filter CPU Overhead in LSM-Trees on Modern Storage Devices**
+### 12. **Reducing Bloom Filter CPU Overhead in LSM-Trees on Modern Storage Devices**
 - **Year**: 2021
 - **PDF**: https://cs-people.bu.edu/mathan/publications/damon21-zhu.pdf
 
-### 12. **Adaptive Quotient Filters**
+### 13. **Adaptive Quotient Filters**
 - **Year**: 2024
 - **arXiv**: https://arxiv.org/abs/2405.10253
 
-### 13. **Online Cascade Learning for Efficient Inference over Streams**
+### 14. **Online Cascade Learning for Efficient Inference over Streams**
 - **Year**: 2024
 - **arXiv**: https://arxiv.org/html/2402.04513v2
+
+### 15. **Vectorized Bloom Filters for Advanced SIMD Processors**
+- **Authors**: Orestis Polychroniou, Kenneth A. Ross
+- **Year**: 2014
+- **Conference**: DaMoN@SIGMOD 2014
+- **DOI**: 10.1145/2619228.2619234
+- **PDF**: http://www.cs.columbia.edu/~orestis/damon14.pdf
+- **Google Scholar**: https://scholar.google.com/scholar?cluster=10906149928962814590
+- **Note**: Introduces vectorized Bloom filter probing using SIMD gathers; achieves >3X speedup over scalar code when cache-resident. Directly relevant to cache-aligned block optimizations.
+
+### 16. **Ultra-Fast Bloom Filters using SIMD Techniques**
+- **Authors**: Jianyuan Lu, Ying Wan, Yang Li, Chuwen Zhang, Huichen Dai, Yi Wang, Gong Zhang, Bin Liu
+- **Year**: 2019
+- **Journal**: IEEE Transactions on Parallel and Distributed Systems
+- **DOI**: 10.1109/TPDS.2018.2869889
+- **PDF**: https://thlujy.github.io/papers/Lujianyuan-tpds-ultra-fast-bf.pdf
+- **Note**: SIMD-optimized Bloom filter variant achieving ultra-fast membership checks through vectorized operations
+
+### 17. **Rethinking SIMD Vectorization for In-Memory Databases**
+- **Authors**: Orestis Polychroniou, Arun Raghavan, Kenneth A. Ross
+- **Year**: 2015
+- **Conference**: SIGMOD 2015
+- **PDF**: https://15721.courses.cs.cmu.edu/spring2016/papers/p1493-polychroniou.pdf
+- **Google Scholar**: https://scholar.google.com/scholar?cluster=5348836532387800796
+- **Note**: Comprehensive SIMD optimization guide for database operations; applicable to hash-based structures and feature extraction optimization
+
+### 18. **Leveraging SIMD Parallelism for Accelerating Network Applications**
+- **Authors**: Hejing Li, Juhyeng Han, Dongsu Han
+- **Year**: 2020
+- **Conference**: APNet 2020
+- **PDF**: https://conferences.sigcomm.org/events/apnet2020/papers/apnet2020-li.pdf
+- **Note**: SIMD optimization for Bloom filters in network applications; shows up to 162% performance improvement
 
 ---
 
@@ -184,63 +222,65 @@ Papers providing solutions for efficient online updates without O(n) retraining:
 - **Google Scholar**: https://scholar.google.com/scholar?cluster=9435809811091804208
 - **Note**: Classic online classifier with per-sample O(d) constant-time updates
 
-### 2. **Confidence-Weighted Linear Classification**
+### 2. **Stabilizing Linear Passive-Aggressive Online Learning with Weighted Reservoir Sampling**
+- **Authors**: Skyler Wu, Fred Lu, Edward Raff, James Holt
+- **Year**: 2024 (arXiv/NeurIPS)
+- **arXiv**: https://arxiv.org/abs/2410.23601
+- **Note**: Addresses concept drift and stability in PA algorithms using reservoir sampling; directly supports the "replay" strategy.
+
+### 3. **Confidence-Weighted Linear Classification**
 - **Authors**: Dredze, Crammer, Pereira
 - **Year**: 2008
 - **Conference**: ICML 2008
 - **PDF**: https://www.cs.jhu.edu/~mdredze/publications/icml2008-cw.pdf
 - **Note**: Online CW updates with faster convergence; robust for streaming
 
-### 3. **AROW: Adaptive Regularization of Weight Vectors**
+### 4. **AROW: Adaptive Regularization of Weight Vectors**
 - **Authors**: Crammer, Kulesza, Dredze
 - **Year**: 2009
 - **Conference**: NeurIPS 2009
 - **PDF**: https://papers.nips.cc/paper/3848-adaptive-regularization-of-weight-vectors.pdf
 - **Note**: Noise-robust online updates; strong empirical performance
 
-### 4. **Pegasos: Primal Estimated sub-Gradient Solver for SVM**
+### 5. **Pegasos: Primal Estimated sub-Gradient Solver for SVM**
 - **Authors**: Shalev-Shwartz et al.
 - **Year**: 2007
 - **Conference**: ICML 2007 / Mathematical Programming
 - **PDF**: https://home.ttic.edu/~nati/Publications/PegasosMP2007.pdf
 - **Note**: Simple stochastic updates; constant work per example
 
-### 5. **Ad Click Prediction: a View from the Trenches**
+### 6. **Ad Click Prediction: a View from the Trenches**
 - **Authors**: McMahan et al.
 - **Year**: 2013
 - **Conference**: KDD 2013
 - **PDF**: https://research.google.com/pubs/archive/41159.pdf
 - **Note**: FTRL-Proximal at web scale; proven online learning in production
 
-### 6. **A Survey on Concept Drift Adaptation**
+### 7. **A Survey on Concept Drift Adaptation**
 - **Authors**: Gama et al.
 - **Year**: 2014
 - **Journal**: ACM Computing Surveys (CSUR)
 - **PDF**: https://mpechen.win.tue.nl/publications/pubs/Gama-et-al-ACMSurv-2014.pdf
 - **Note**: Motivation for continuous updates under drift
 
-### 7. **Learning from Time-Changing Data with Adaptive Windowing (ADWIN)**
+### 8. **Learning from Time-Changing Data with Adaptive Windowing (ADWIN)**
 - **Authors**: Bifet & Gavalda
 - **Year**: 2007
 - **Conference**: SDM 2007
 - **PDF**: https://www.researchgate.net/publication/220907178_Learning_from_Time-Changing_Data_with_Adaptive_Windowing/links/0deec520f3bb300773000000/Learning-from-Time-Changing-Data-with-Adaptive-Windowing.pdf
 - **Note**: Drift detection enabling safe incremental updates
 
-### 8. **Forgetful Forests: high performance learning data structures for streaming data under concept drift**
+### 9. **Forgetful Forests: high performance learning data structures for streaming data under concept drift**
 - **Year**: 2022
 - **arXiv**: https://arxiv.org/abs/2212.07876
 
-### 9. **Lambda Learner: Fast Incremental Learning on Data Streams**
+### 10. **Lambda Learner: Fast Incremental Learning on Data Streams**
 - **Year**: 2020
 - **arXiv**: https://arxiv.org/abs/2010.05154
 
-### 10. **Online Boosting Adaptive Learning under Concept Drift for Multistream Classification**
+### 11. **Online Boosting Adaptive Learning under Concept Drift for Multistream Classification**
 - **Year**: 2024
 - **PDF**: https://ojs.aaai.org/index.php/AAAI/article/view/29590/30994
-
-### 11. **Online Cascade Learning for Efficient Inference over Streams**
-- **Year**: 2024
-- **arXiv**: https://arxiv.org/html/2402.04513v2
 
 ### 12. **Learning from Data Streams: An Overview and Update**
 - **Year**: 2022
@@ -249,6 +289,39 @@ Papers providing solutions for efficient online updates without O(n) retraining:
 ### 13. **Cascaded Learned Bloom filter for Optimal Model-Filter Size Balance and Fast Rejection**
 - **Year**: 2025
 - **arXiv**: https://arxiv.org/abs/2502.03696
+
+### 14. **Catastrophic Interference in Connectionist Networks: The Sequential Learning Problem** (Foundational)
+- **Authors**: Michael McCloskey, Neal J. Cohen
+- **Year**: 1989
+- **Journal**: Psychology of Learning and Motivation, Volume 24, Pages 109-165
+- **DOI**: 10.1016/S0079-7421(08)60536-8
+- **PDF**: https://www.andywills.info/hbab/mccloskeycohen.pdf
+- **Google Scholar**: https://scholar.google.com/scholar?cluster=10244199218648564611
+- **Cited by**: 3,969+ papers
+- **Note**: Seminal paper defining "catastrophic forgetting" - the foundational problem that experience replay and negative sample retention strategies address
+
+### 15. **Experience Replay for Continual Learning**
+- **Authors**: David Rolnick, Arun Ahuja, Jonathan Schwarz, Timothy P. Lillicrap, Greg Wayne
+- **Year**: 2019
+- **Conference**: NeurIPS 2019
+- **arXiv**: https://arxiv.org/abs/1811.11682
+- **PDF**: https://arxiv.org/pdf/1811.11682.pdf
+- **Google Scholar**: https://scholar.google.com/scholar?cluster=17267265023644982769
+- **Note**: Shows that simple experience replay buffers can substantially reduce catastrophic forgetting; directly supports negative pool replay mechanisms in online learned Bloom filters
+
+### 16. **Mitigating Catastrophic Forgetting in Online Continual Learning by Modeling Previous Task Interrelations**
+- **Authors**: Yichen Wu, Hong Wang, Peilin Zhao, Yefeng Zheng, Ying Wei, Long-Kai Huang
+- **Year**: 2024
+- **Conference**: ICML 2024 (PMLR 235:53892-53908)
+- **PDF**: https://proceedings.mlr.press/v235/wu24ab.html
+- **Note**: Recent work on replay-based methods for online continual learning with non-stationary data distributions
+
+### 17. **Replay in Deep Learning: Current Approaches and Missing Biological Elements**
+- **Authors**: Tyler L. Hayes, Giri P. Krishnan, Maxim Bazhenov, Hava T. Siegelmann, Terrence J. Sejnowski, Christopher Kanan
+- **Year**: 2021
+- **Journal**: Neural Computation
+- **PDF**: https://papers.cnl.salk.edu/PDFs/Replay%20in%20Deep%20Learning%202021-3626.pdf
+- **Note**: Comprehensive survey on replay mechanisms for mitigating catastrophic forgetting; provides biological motivation for replay strategies
 
 ---
 
