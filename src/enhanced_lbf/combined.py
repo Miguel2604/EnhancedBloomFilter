@@ -12,11 +12,13 @@ import numpy as np
 from typing import Any, List, Tuple, Optional, Dict
 from collections import deque
 from functools import lru_cache
-import hashlib
-import struct
-import time
-import sys
 import os
+import random
+import struct
+import sys
+import time
+
+import mmh3
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bloom_filter.standard import StandardBloomFilter
@@ -82,7 +84,6 @@ class CombinedEnhancedLBF:
         self.negative_pool = []
         if initial_negative_set:
             # Keep up to 1000 negatives for replay
-            import random
             self.negative_pool = list(initial_negative_set)
             if len(self.negative_pool) > 1000:
                 self.negative_pool = random.sample(self.negative_pool, 1000)
@@ -90,6 +91,7 @@ class CombinedEnhancedLBF:
         self._init_cache_structure()
         self._init_incremental_learning()
         self._init_adaptive_control()
+        self._calibrate_initial_threshold(initial_positive_set, initial_negative_set)
         
         # Statistics
         self.total_queries = 0
@@ -188,6 +190,59 @@ class CombinedEnhancedLBF:
             self.pid = None
             self.recent_queries = None
     
+    def _calibrate_initial_threshold(self,
+                                     positive_set: Optional[List[Any]],
+                                     negative_set: Optional[List[Any]]):
+        """Calibrate the initial decision threshold using labeled bootstrap data."""
+        if not positive_set or not negative_set:
+            return
+
+        pos_probs = self._batch_predict_proba(positive_set)
+        neg_probs = self._batch_predict_proba(negative_set)
+
+        if pos_probs.size == 0 or neg_probs.size == 0:
+            return
+
+        candidate_thresholds = np.linspace(0.25, 0.85, num=61)
+        fpr_tolerance = min(0.5, max(self.target_fpr * 1.1, self.target_fpr + 0.002))
+        best_threshold = self.threshold
+        best_score = -np.inf
+
+        for t in candidate_thresholds:
+            fpr = float(np.mean(neg_probs >= t))
+            tpr = float(np.mean(pos_probs >= t))
+            if fpr <= fpr_tolerance:
+                score = tpr - (fpr * 0.25)
+                if score > best_score:
+                    best_score = score
+                    best_threshold = t
+
+        if not np.isfinite(best_score):
+            quantile = np.clip(1.0 - fpr_tolerance, 0.0, 0.999)
+            best_threshold = float(np.quantile(neg_probs, quantile))
+
+        self.threshold = float(np.clip(best_threshold, 0.25, 0.85))
+
+        if self.adaptive_enabled:
+            if self.threshold_history:
+                self.threshold_history[-1] = self.threshold
+            else:
+                self.threshold_history = [self.threshold]
+
+    def _batch_predict_proba(self, items: List[Any], limit: int = 2000) -> np.ndarray:
+        """Compute prediction probabilities for up to `limit` items."""
+        if not items:
+            return np.array([], dtype=np.float32)
+
+        subset = items if len(items) <= limit else items[:limit]
+        probs = np.empty(len(subset), dtype=np.float32)
+
+        for idx, item in enumerate(subset):
+            feats = self._extract_url_features(item)
+            probs[idx] = self._predict_proba(feats)
+
+        return probs
+
     def add(self, item: Any, label: int = 1):
         """Add item with proper training."""
         self.total_updates += 1
@@ -234,13 +289,19 @@ class CombinedEnhancedLBF:
         score = self.model.predict(features)
         probability = 1 / (1 + np.exp(-score))
         
-        # High model confidence: treat as potential member even if not
-        # explicitly inserted. This improves detection on unseen positives
-        # while still allowing Bloom-style false positives.
+        # High model confidence: check primary filter to confirm membership.
+        # The model is used for ROUTING, not for membership confirmation.
+        # We must still verify with the actual Bloom filter to maintain
+        # proper FPR guarantees.
         if probability >= self.threshold:
-            result = True
+            # Model thinks it's likely positive - check primary filter
+            if self.primary_filter.query(item):
+                result = True
+            else:
+                # Model confident but not in primary - check backup
+                result = self.positive_backup.query(item)
         else:
-            # Always consult the primary filter first to avoid false negatives.
+            # Low model confidence: check both filters to avoid false negatives
             if self.primary_filter.query(item):
                 result = True
             else:
@@ -290,10 +351,10 @@ class CombinedEnhancedLBF:
         L = max(1, len(s))
         features[0] = L / 100.0
 
-        # 1-4. Normalized hash-based features (generic, work for any string)
-        for idx, h in enumerate((hashlib.md5, hashlib.sha1, hashlib.sha256, hashlib.sha512), start=1):
-            hv = int(h(s.encode("utf-8", errors="ignore")).hexdigest()[:8], 16)
-            features[idx] = (hv % 65536) / 65536.0
+        # 1-4. Fast normalized hash sketches (mmh3 is significantly cheaper than crypto digests)
+        for idx, seed in enumerate((17, 31, 73, 127), start=1):
+            hv = mmh3.hash(s, seed=seed, signed=False)
+            features[idx] = (hv & 0xFFFF) / 65535.0
 
         # Character category ratios
         digits = sum(c.isdigit() for c in s)
