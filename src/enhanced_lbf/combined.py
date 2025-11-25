@@ -338,72 +338,74 @@ class CombinedEnhancedLBF:
         
         return result
     
+    # Pre-computed lookup table for DNA characters (A, C, G, T, a, c, g, t)
+    _DNA_LOOKUP = np.zeros(256, dtype=bool)
+    _DNA_LOOKUP[[65, 67, 71, 84, 97, 99, 103, 116]] = True
+
     def _extract_url_features(self, item: Any) -> np.ndarray:
         """Extract generic string features with URL- and pattern-aware signals.
 
+        Optimized for throughput - avoids expensive NumPy operations on small arrays.
         Must return exactly 20 features.
         """
         s = str(item)
         s_lower = s.lower()
         features = np.zeros(20, dtype=np.float32)
 
+        L = len(s)
+        if L == 0:
+            return features
+
         # 0. Normalized length
-        L = max(1, len(s))
         features[0] = L / 100.0
 
-        # 1-4. Fast normalized hash sketches (mmh3 is significantly cheaper than crypto digests)
+        # 1-4. Fast normalized hash sketches
         for idx, seed in enumerate((17, 31, 73, 127), start=1):
             hv = mmh3.hash(s, seed=seed, signed=False)
             features[idx] = (hv & 0xFFFF) / 65535.0
 
-        # Character category ratios
+        # 5-7. Character category ratios (use native str methods - faster for small strings)
         digits = sum(c.isdigit() for c in s)
         alphas = sum(c.isalpha() for c in s)
         others = L - digits - alphas
-        features[5] = digits / float(L)
-        features[6] = alphas / float(L)
-        features[7] = max(0.0, others) / float(L)
+        features[5] = digits / L
+        features[6] = alphas / L
+        features[7] = max(0.0, others) / L
 
-        # 8. Suspicious token indicator count (URLs, malware names)
-        suspicious_tokens = ["malware", "phishing", "virus", "trojan", "hack"]
-        features[8] = sum(1.0 for t in suspicious_tokens if t in s_lower) / len(suspicious_tokens)
+        # 8. Suspicious token indicator count
+        features[8] = (
+            ("malware" in s_lower) + ("phishing" in s_lower) + 
+            ("virus" in s_lower) + ("trojan" in s_lower) + ("hack" in s_lower)
+        ) / 5.0
 
-        # 9. Suspicious TLD / pattern (.ru, .cn, IP-like, etc.)
-        tld_bad = any(t in s_lower for t in [".ru", ".cn", ".xyz", ".top"])
-        looks_like_ip = all(part.isdigit() and 0 <= int(part) <= 255 for part in s.split(".") if part.isdigit()) and s.count(".") == 3
-        features[9] = 1.0 if (tld_bad or looks_like_ip) else 0.0
+        # 9. Suspicious TLD
+        features[9] = 1.0 if (".ru" in s_lower or ".cn" in s_lower or 
+                              ".xyz" in s_lower or ".top" in s_lower) else 0.0
 
-        # 10. Benign brand tokens (helps distinguish common sites)
-        benign_tokens = ["google", "amazon", "microsoft", "github", "wikipedia"]
-        features[10] = sum(1.0 for t in benign_tokens if t in s_lower) / len(benign_tokens)
+        # 10. Benign brand tokens
+        features[10] = (
+            ("google" in s_lower) + ("amazon" in s_lower) + 
+            ("microsoft" in s_lower) + ("github" in s_lower) + ("wikipedia" in s_lower)
+        ) / 5.0
 
-        # 11-14. Structural URL-ish features (but still defined for generic strings)
+        # 11-14. Structural features
         features[11] = 1.0 if s_lower.startswith("https://") else 0.0
         features[12] = s.count("/") / 10.0
         features[13] = s.count(".") / 10.0
         features[14] = s.count("-") / 10.0
 
-        # 15-17. Character code statistics (generic)
-        codes = [ord(c) for c in s]
-        if codes:
-            features[15] = np.mean(codes) / 128.0
-            features[16] = np.std(codes) / 64.0
-            features[17] = len(set(codes)) / float(L)
-        else:
-            features[15] = features[16] = features[17] = 0.0
+        # 15-17. Lightweight character hints (Option D: no np.mean/std)
+        features[15] = ord(s[0]) / 256.0  # First char hint
+        features[16] = ord(s[-1]) / 256.0  # Last char hint
+        features[17] = len(set(s)) / L  # Unique char ratio (Python set is fast)
 
-        # 18. DNA-like pattern indicator (for genomic k-mers)
-        if L > 0 and all(c in "ACGTacgt" for c in s):
-            features[18] = 1.0
-        else:
-            features[18] = 0.0
+        # 18. DNA-like pattern indicator (fast set check)
+        features[18] = 1.0 if all(c in "ACGTacgt" for c in s) else 0.0
 
-        # 19. Key-like pattern indicator (database/cache keys, hex IDs, etc.)
-        looks_hex = all(c in "0123456789abcdefABCDEF" for c in s if not c.isspace()) and L > 8
-        has_delims = any(ch in s for ch in [":", "_", "-"])
-        features[19] = 1.0 if (looks_hex or has_delims) else 0.0
+        # 19. Key-like pattern indicator
+        features[19] = 1.0 if (":" in s or "_" in s or "-" in s) else 0.0
 
-        return features.astype(np.float32)
+        return features
     
     def _adjust_threshold(self):
         """Adjust threshold using PID control."""
