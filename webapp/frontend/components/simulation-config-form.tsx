@@ -1,30 +1,32 @@
-import { useState } from "react";
 import { SimulationConfig, FILTER_OPTIONS } from "@/types/simulation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Play, Settings2 } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 interface SimulationConfigFormProps {
   onSubmit: (config: SimulationConfig) => void;
   isLoading: boolean;
+  config: SimulationConfig;
+  onConfigChange: (config: SimulationConfig) => void;
 }
 
-export function SimulationConfigForm({ onSubmit, isLoading }: SimulationConfigFormProps) {
-  const [datasetSize, setDatasetSize] = useState(100000);
-  const [queryCount, setQueryCount] = useState(50000);
-  const [selectedFilters, setSelectedFilters] = useState<string[]>(["standard_bf", "basic_lbf", "cache_aligned_lbf", "combined_lbf"]);
+export function SimulationConfigForm({ onSubmit, isLoading, config, onConfigChange }: SimulationConfigFormProps) {
+  const selectedFilters = config.selectedFilters;
+  const updateConfig = (partial: Partial<SimulationConfig>) => {
+    onConfigChange({ ...config, ...partial });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ datasetSize, queryCount, selectedFilters });
+    onSubmit(config);
   };
 
   const toggleFilter = (id: string) => {
-    setSelectedFilters((prev) =>
-      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
-    );
+    const next = selectedFilters.includes(id)
+      ? selectedFilters.filter((f) => f !== id)
+      : [...selectedFilters, id];
+    updateConfig({ selectedFilters: next });
   };
 
   return (
@@ -35,8 +37,8 @@ export function SimulationConfigForm({ onSubmit, isLoading }: SimulationConfigFo
           <Input
             id="dataset-size"
             type="number"
-            value={datasetSize}
-            onChange={(e) => setDatasetSize(Number(e.target.value))}
+            value={config.datasetSize}
+            onChange={(e) => updateConfig({ datasetSize: Number(e.target.value) })}
             className="rounded-xl border-gray-200 bg-gray-50 focus:bg-white transition-colors"
           />
         </div>
@@ -45,8 +47,8 @@ export function SimulationConfigForm({ onSubmit, isLoading }: SimulationConfigFo
           <Input
             id="query-count"
             type="number"
-            value={queryCount}
-            onChange={(e) => setQueryCount(Number(e.target.value))}
+            value={config.queryCount}
+            onChange={(e) => updateConfig({ queryCount: Number(e.target.value) })}
             className="rounded-xl border-gray-200 bg-gray-50 focus:bg-white transition-colors"
           />
         </div>

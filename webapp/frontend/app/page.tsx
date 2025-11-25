@@ -11,7 +11,7 @@ import { MoreHorizontal, Activity } from 'lucide-react';
 import { formatThroughput } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { results, isLoading, error, run } = useSimulation();
+  const { results, isLoading, error, run, config, setConfig } = useSimulation();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -54,7 +54,12 @@ export default function DashboardPage() {
             {/* Left Column: Config & Summary */}
             <div className="lg:col-span-4 space-y-8">
               <DashboardCard title="Configuration" className="h-auto">
-                <SimulationConfigForm onSubmit={run} isLoading={isLoading} />
+                <SimulationConfigForm 
+                  onSubmit={run} 
+                  isLoading={isLoading} 
+                  config={config}
+                  onConfigChange={setConfig}
+                />
               </DashboardCard>
 
               {results && (

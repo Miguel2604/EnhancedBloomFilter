@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Sidebar } from "@/components/sidebar";
+import { SimulationProvider } from "@/context/simulation-context";
 import { StreamProvider } from "@/context/stream-context";
 import "./globals.css";
 
@@ -30,14 +31,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#F8F9FC]`}
       >
-        <StreamProvider>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <div className="flex-1 pl-20">
-              {children}
+        <SimulationProvider>
+          <StreamProvider>
+            <div className="flex min-h-screen">
+              <Sidebar />
+              <div className="flex-1 pl-20">
+                {children}
+              </div>
             </div>
-          </div>
-        </StreamProvider>
+          </StreamProvider>
+        </SimulationProvider>
       </body>
     </html>
   );
