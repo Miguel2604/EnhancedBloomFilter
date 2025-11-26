@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Activity } from 'lucide-react';
+import { LayoutDashboard, Activity, GitCompare } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -23,6 +23,12 @@ export function Sidebar() {
           icon={<Activity />} 
           label="Realtime"
           active={pathname === "/realtime"} 
+        />
+        <NavItem 
+          href="/comparison" 
+          icon={<GitCompare />} 
+          label="Comparison"
+          active={pathname === "/comparison"} 
         />
       </nav>
 

@@ -588,7 +588,7 @@ class RealWorldComparativeAnalyzer:
                 lowest_fpr = min(successful_variants.items(),
                                key=lambda x: x[1]['fpr'])
                 print(f"  Lowest FPR: {lowest_fpr[0]} "
-                      f"({lowest_fpr[1]['fpr']:.2%})")
+                      f"({lowest_fpr[1]['fpr']:.4%})")
                 
                 # Highest throughput
                 highest_throughput = max(successful_variants.items(),
