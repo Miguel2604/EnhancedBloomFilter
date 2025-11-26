@@ -9,14 +9,14 @@ export function DashboardCard({ title, action, children, className, ...props }: 
   return (
     <div 
       className={cn(
-        "bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex flex-col h-full transition-all hover:shadow-md", 
+        "bg-white rounded-none p-6 border border-black flex flex-col h-full transition-all hover:bg-gray-50", 
         className
       )} 
       {...props}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between mb-6">
-          {title && <h3 className="text-lg font-semibold text-gray-900">{title}</h3>}
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-black">
+          {title && <h3 className="text-xl font-bold uppercase tracking-tight text-black">{title}</h3>}
           {action && <div>{action}</div>}
         </div>
       )}

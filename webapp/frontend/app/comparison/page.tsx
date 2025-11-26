@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useComparisonContext } from "@/context/comparison-context";
 import { DashboardCard } from "@/components/ui/dashboard-card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -12,7 +12,6 @@ import {
   TrendingDown,
   AlertTriangle,
   CheckCircle2,
-  ArrowRight,
   Play,
   RefreshCw
 } from "lucide-react";
@@ -27,86 +26,22 @@ import {
   Legend,
   BarChart,
   Bar,
-  Cell,
 } from "recharts";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
-interface ComparisonData {
-  basic_lbf: {
-    name: string;
-    training_time_ms: number;
-    avg_query_time_us: number;
-    throughput: number;
-    update_time_ms: number;
-    update_complexity: string;
-    fpr_mean: number;
-    fpr_std: number;
-    fpr_variance_pct: number;
-    fpr_history: number[];
-    memory_bytes: number;
-    memory_mb: number;
-    problems: string[];
-  };
-  enhanced_lbf: {
-    name: string;
-    training_time_ms: number;
-    avg_query_time_us: number;
-    throughput: number;
-    update_time_ms: number;
-    update_complexity: string;
-    fpr_mean: number;
-    fpr_std: number;
-    fpr_variance_pct: number;
-    fpr_history: number[];
-    memory_bytes: number;
-    memory_mb: number;
-    solutions: string[];
-  };
-  improvements: {
-    throughput_increase_pct: number;
-    query_speedup: number;
-    update_speedup: number;
-    fpr_stability_improvement: number;
-    summary: {
-      cache_locality: { before: string; after: string; improvement: string };
-      update_complexity: { before: string; after: string; improvement: string };
-      fpr_stability: { before: string; after: string; improvement: string };
-    };
-  };
+// Helper to calculate standard deviation
+function calculateStdDev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
+  const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+  return Math.sqrt(avgSquaredDiff);
 }
 
 export default function ComparisonPage() {
-  const [data, setData] = useState<ComparisonData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [datasetSize, setDatasetSize] = useState(10000);
-  const [queryCount, setQueryCount] = useState(5000);
+  const { data, isLoading, error, config, setConfig, runComparison } = useComparisonContext();
 
-  const runComparison = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/compare-enhancements`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_size: datasetSize,
-          query_count: queryCount,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to run comparison: ${response.status}`);
-      }
-
-      const result = await response.json();
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
+  const handleRunComparison = () => {
+    runComparison(config);
   };
 
   const fprChartData = data
@@ -141,14 +76,14 @@ export default function ComparisonPage() {
     : [];
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] font-sans text-gray-900">
+    <div className="min-h-screen bg-white font-sans text-black">
       <main className="p-8 max-w-7xl mx-auto space-y-8">
-        <header>
-          <h1 className="text-3xl font-bold text-gray-900">
+        <header className="border-b border-black pb-6">
+          <h1 className="text-4xl font-bold uppercase tracking-tighter text-black">
             Enhancement Comparison
           </h1>
-          <p className="text-gray-500 mt-2">
-            Compare Basic Learned Bloom Filter (with problems) vs Combined Enhanced LBF (with solutions)
+          <p className="text-gray-500 mt-2 font-mono uppercase tracking-widest text-sm">
+            Basic LBF vs Combined Enhanced LBF
           </p>
         </header>
 
@@ -157,12 +92,12 @@ export default function ComparisonPage() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Dataset Size: {datasetSize.toLocaleString()} items
+                <label className="block text-xs font-bold uppercase tracking-widest text-black mb-2">
+                  Dataset Size: {config.datasetSize.toLocaleString()} items
                 </label>
                 <Slider
-                  value={[datasetSize]}
-                  onValueChange={(val) => setDatasetSize(val[0])}
+                  value={[config.datasetSize]}
+                  onValueChange={(val) => setConfig({ ...config, datasetSize: val[0] })}
                   min={1000}
                   max={30000}
                   step={1000}
@@ -170,12 +105,12 @@ export default function ComparisonPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Query Count: {queryCount.toLocaleString()} queries
+                <label className="block text-xs font-bold uppercase tracking-widest text-black mb-2">
+                  Query Count: {config.queryCount.toLocaleString()} queries
                 </label>
                 <Slider
-                  value={[queryCount]}
-                  onValueChange={(val) => setQueryCount(val[0])}
+                  value={[config.queryCount]}
+                  onValueChange={(val) => setConfig({ ...config, queryCount: val[0] })}
                   min={1000}
                   max={10000}
                   step={500}
@@ -184,9 +119,9 @@ export default function ComparisonPage() {
               </div>
             </div>
             <Button
-              onClick={runComparison}
+              onClick={handleRunComparison}
               disabled={isLoading}
-              className="w-full md:w-auto"
+              className="w-full md:w-auto bg-black text-white rounded-none hover:bg-gray-900 border border-black uppercase font-bold"
             >
               {isLoading ? (
                 <>
@@ -201,23 +136,23 @@ export default function ComparisonPage() {
               )}
             </Button>
             {error && (
-              <p className="text-red-500 text-sm mt-2">{error}</p>
+              <p className="text-red-600 text-sm mt-2 font-bold uppercase">{error}</p>
             )}
           </div>
         </DashboardCard>
 
         {/* Loading State */}
         {isLoading && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl shadow-2xl border border-gray-100">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80">
+            <div className="flex flex-col items-center gap-6 p-12 bg-white border border-black shadow-none">
               <div className="relative w-16 h-16">
-                <div className="absolute inset-0 border-4 border-gray-100 rounded-full" />
-                <div className="absolute inset-0 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                <Activity className="absolute inset-0 m-auto w-6 h-6 text-purple-600 animate-pulse" />
+                <div className="absolute inset-0 border-4 border-gray-200" />
+                <div className="absolute inset-0 border-4 border-black border-t-transparent animate-spin" />
+                <Activity className="absolute inset-0 m-auto w-6 h-6 text-black animate-pulse" />
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-bold text-gray-900">Running Comparison</h3>
-                <p className="text-sm text-gray-500">Testing both implementations...</p>
+                <h3 className="text-lg font-bold uppercase tracking-widest text-black">Running Comparison</h3>
+                <p className="text-sm font-mono text-gray-500 mt-2">Testing implementations...</p>
               </div>
             </div>
           </div>
@@ -227,53 +162,53 @@ export default function ComparisonPage() {
           <>
             {/* Key Improvements Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-[2rem] p-6 shadow-lg">
-                <div className="flex items-center gap-2 text-white/80 mb-2">
-                  <Zap className="w-5 h-5" />
-                  <span className="text-sm font-medium">Query Speedup</span>
+              <div className="bg-white text-black border border-black p-6">
+                <div className="flex items-center gap-2 text-gray-500 mb-2 pb-2 border-b border-black">
+                  <Zap className="w-4 h-4 text-black" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-black">Query Speedup</span>
                 </div>
-                <div className="text-4xl font-bold mb-1">
+                <div className="text-5xl font-black mb-1 tracking-tighter">
                   {data.improvements.query_speedup.toFixed(2)}x
                 </div>
-                <p className="text-sm text-white/80">faster queries</p>
+                <p className="text-xs font-mono uppercase text-gray-500">faster queries</p>
               </div>
 
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-[2rem] p-6 shadow-lg">
-                <div className="flex items-center gap-2 text-white/80 mb-2">
-                  <Clock className="w-5 h-5" />
-                  <span className="text-sm font-medium">Update Speedup</span>
+              <div className="bg-black text-white border border-black p-6">
+                <div className="flex items-center gap-2 text-white/60 mb-2 pb-2 border-b border-white">
+                  <Clock className="w-4 h-4 text-white" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-white">Update Speedup</span>
                 </div>
-                <div className="text-4xl font-bold mb-1">
+                <div className="text-5xl font-black mb-1 tracking-tighter">
                   {data.improvements.update_speedup.toFixed(0)}x
                 </div>
-                <p className="text-sm text-white/80">faster updates (O(1) vs O(n))</p>
+                <p className="text-xs font-mono uppercase text-white/60">faster updates (O(1) vs O(n))</p>
               </div>
 
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-[2rem] p-6 shadow-lg">
-                <div className="flex items-center gap-2 text-white/80 mb-2">
-                  <TrendingUp className="w-5 h-5" />
-                  <span className="text-sm font-medium">FPR Stability</span>
+              <div className="bg-white text-black border border-black p-6">
+                <div className="flex items-center gap-2 text-gray-500 mb-2 pb-2 border-b border-black">
+                  <TrendingUp className="w-4 h-4 text-black" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-black">FPR Stability</span>
                 </div>
-                <div className="text-4xl font-bold mb-1">
+                <div className="text-5xl font-black mb-1 tracking-tighter">
                   {data.improvements.fpr_stability_improvement.toFixed(1)}x
                 </div>
-                <p className="text-sm text-white/80">more stable</p>
+                <p className="text-xs font-mono uppercase text-gray-500">more stable</p>
               </div>
             </div>
 
             {/* Before/After Comparison Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Basic LBF - Problems */}
-              <DashboardCard className="border-2 border-red-200 bg-red-50/30">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
+              <DashboardCard className="border border-red-600 bg-white">
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-red-600">
+                  <div className="w-8 h-8 flex items-center justify-center border border-red-600 bg-red-600 text-white">
+                    <AlertTriangle className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">
-                      Before: Basic Learned Bloom Filter
+                    <h3 className="text-lg font-bold uppercase tracking-tight text-red-600">
+                      Before: Basic LBF
                     </h3>
-                    <p className="text-sm text-red-600 font-medium">
+                    <p className="text-xs font-bold uppercase tracking-widest text-red-400">
                       3 Critical Problems
                     </p>
                   </div>
@@ -283,40 +218,40 @@ export default function ComparisonPage() {
                   {data.basic_lbf.problems.map((problem, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-3 p-3 bg-white rounded-xl border border-red-100"
+                      className="flex items-start gap-3 p-3 bg-white border border-red-100"
                     >
-                      <TrendingDown className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-700">{problem}</span>
+                      <TrendingDown className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-sm font-mono text-gray-700">{problem}</span>
                     </div>
                   ))}
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-red-200">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">
                     Performance Metrics
                   </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-4 text-sm font-mono">
                     <div>
-                      <span className="text-gray-500">Throughput:</span>
-                      <span className="ml-2 font-medium">
+                      <span className="text-gray-500 block text-xs uppercase">Throughput</span>
+                      <span className="font-bold">
                         {(data.basic_lbf.throughput / 1000).toFixed(1)}K ops/s
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Update:</span>
-                      <span className="ml-2 font-medium">
+                      <span className="text-gray-500 block text-xs uppercase">Update</span>
+                      <span className="font-bold">
                         {data.basic_lbf.update_time_ms.toFixed(1)}ms ({data.basic_lbf.update_complexity})
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">FPR Variance:</span>
-                      <span className="ml-2 font-medium text-red-600">
+                      <span className="text-gray-500 block text-xs uppercase">FPR Variance</span>
+                      <span className="font-bold text-red-600">
                         ±{data.basic_lbf.fpr_variance_pct.toFixed(0)}%
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Memory:</span>
-                      <span className="ml-2 font-medium">
+                      <span className="text-gray-500 block text-xs uppercase">Memory</span>
+                      <span className="font-bold">
                         {data.basic_lbf.memory_mb.toFixed(2)} MB
                       </span>
                     </div>
@@ -325,16 +260,16 @@ export default function ComparisonPage() {
               </DashboardCard>
 
               {/* Enhanced LBF - Solutions */}
-              <DashboardCard className="border-2 border-green-200 bg-green-50/30">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <DashboardCard className="border border-black bg-white">
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-black">
+                  <div className="w-8 h-8 flex items-center justify-center border border-black bg-black text-white">
+                    <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">
-                      After: Combined Enhanced LBF
+                    <h3 className="text-lg font-bold uppercase tracking-tight text-black">
+                      After: Enhanced LBF
                     </h3>
-                    <p className="text-sm text-green-600 font-medium">
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
                       3 Solutions Applied
                     </p>
                   </div>
@@ -344,40 +279,40 @@ export default function ComparisonPage() {
                   {data.enhanced_lbf.solutions.map((solution, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-3 p-3 bg-white rounded-xl border border-green-100"
+                      className="flex items-start gap-3 p-3 bg-white border border-gray-200"
                     >
-                      <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-gray-700">{solution}</span>
+                      <CheckCircle2 className="w-4 h-4 text-black mt-0.5 flex-shrink-0" />
+                      <span className="text-sm font-mono text-black">{solution}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-green-200">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                <div className="mt-6 pt-6 border-t border-black">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">
                     Performance Metrics
                   </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-4 text-sm font-mono">
                     <div>
-                      <span className="text-gray-500">Throughput:</span>
-                      <span className="ml-2 font-medium text-green-600">
+                      <span className="text-gray-500 block text-xs uppercase">Throughput</span>
+                      <span className="font-bold text-black">
                         {(data.enhanced_lbf.throughput / 1000).toFixed(1)}K ops/s
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Update:</span>
-                      <span className="ml-2 font-medium text-green-600">
+                      <span className="text-gray-500 block text-xs uppercase">Update</span>
+                      <span className="font-bold text-black">
                         {data.enhanced_lbf.update_time_ms.toFixed(3)}ms ({data.enhanced_lbf.update_complexity})
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">FPR Variance:</span>
-                      <span className="ml-2 font-medium text-green-600">
+                      <span className="text-gray-500 block text-xs uppercase">FPR Variance</span>
+                      <span className="font-bold text-black">
                         ±{data.enhanced_lbf.fpr_variance_pct.toFixed(0)}%
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Memory:</span>
-                      <span className="ml-2 font-medium">
+                      <span className="text-gray-500 block text-xs uppercase">Memory</span>
+                      <span className="font-bold">
                         {data.enhanced_lbf.memory_mb.toFixed(2)} MB
                       </span>
                     </div>
@@ -390,28 +325,25 @@ export default function ComparisonPage() {
             <DashboardCard title="Improvement Details">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {Object.entries(data.improvements.summary).map(([key, value]) => (
-                  <div key={key} className="p-4 bg-gray-50 rounded-xl">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3 capitalize">
+                  <div key={key} className="p-4 border border-gray-200 bg-white">
+                    <h4 className="text-xs font-bold uppercase tracking-widest text-black mb-4 pb-2 border-b border-gray-100">
                       {key.replace(/_/g, " ")}
                     </h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-16">Before:</span>
-                        <span className="text-sm font-medium text-red-600">
+                    <div className="space-y-3 font-mono text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500 uppercase">Before</span>
+                        <span className="text-red-600 font-bold text-right">
                           {value.before}
                         </span>
                       </div>
-                      <div className="flex items-center justify-center my-2">
-                        <ArrowRight className="w-4 h-4 text-gray-400" />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-16">After:</span>
-                        <span className="text-sm font-medium text-green-600">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500 uppercase">After</span>
+                        <span className="text-black font-bold text-right">
                           {value.after}
                         </span>
                       </div>
-                      <div className="pt-2 border-t border-gray-200 mt-2">
-                        <span className="text-sm font-bold text-purple-600">
+                      <div className="pt-2 border-t border-black mt-2 text-right">
+                        <span className="text-xs font-bold uppercase text-black bg-gray-100 px-2 py-1">
                           {value.improvement}
                         </span>
                       </div>
@@ -425,45 +357,66 @@ export default function ComparisonPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* FPR Stability Chart */}
               <DashboardCard title="FPR Stability Comparison">
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-xs font-mono text-gray-500 mb-4 uppercase">
                   FPR measured across 20 rounds with varying query distributions
                 </p>
+                {/* FPR Standard Deviation Display */}
+                <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 border border-gray-200">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-red-600 block mb-1">Basic LBF</span>
+                    <div className="font-mono text-sm">
+                      <span className="text-gray-500">Mean:</span> <span className="font-bold">{data.basic_lbf.fpr_mean.toFixed(3)}%</span>
+                      <span className="mx-2 text-gray-300">|</span>
+                      <span className="text-gray-500">Std Dev:</span> <span className="font-bold text-red-600">{calculateStdDev(data.basic_lbf.fpr_history).toFixed(4)}%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-black block mb-1">Enhanced LBF</span>
+                    <div className="font-mono text-sm">
+                      <span className="text-gray-500">Mean:</span> <span className="font-bold">{data.enhanced_lbf.fpr_mean.toFixed(3)}%</span>
+                      <span className="mx-2 text-gray-300">|</span>
+                      <span className="text-gray-500">Std Dev:</span> <span className="font-bold text-black">{calculateStdDev(data.enhanced_lbf.fpr_history).toFixed(4)}%</span>
+                    </div>
+                  </div>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={fprChartData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <CartesianGrid vertical={false} stroke="#e5e5e5" />
                       <XAxis
                         dataKey="round"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
+                        tick={{ fill: "#000", fontSize: 10, fontFamily: "sans-serif", fontWeight: "bold" }}
                       />
                       <YAxis
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
+                        tick={{ fill: "#000", fontSize: 10, fontFamily: "sans-serif", fontWeight: "bold" }}
                         tickFormatter={(val) => `${val.toFixed(1)}%`}
                       />
                       <Tooltip
                         formatter={(value: number) => [`${value.toFixed(2)}%`, ""]}
                         contentStyle={{
-                          borderRadius: "12px",
-                          border: "none",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                          borderRadius: "0px",
+                          border: "1px solid black",
+                          boxShadow: "none",
+                          fontFamily: "sans-serif"
                         }}
+                        itemStyle={{ fontWeight: "bold" }}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ fontFamily: 'sans-serif', fontSize: '10px', fontWeight: 'bold' }} />
                       <Line
-                        type="monotone"
+                        type="linear"
                         dataKey="Basic LBF"
-                        stroke="#ef4444"
+                        stroke="#dc2626"
                         strokeWidth={2}
                         dot={false}
                       />
                       <Line
-                        type="monotone"
+                        type="linear"
                         dataKey="Enhanced LBF"
-                        stroke="#22c55e"
+                        stroke="#000000"
                         strokeWidth={2}
                         dot={false}
                       />
@@ -474,13 +427,13 @@ export default function ComparisonPage() {
 
               {/* Performance Bar Chart */}
               <DashboardCard title="Performance Metrics">
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-xs font-mono text-gray-500 mb-6 uppercase">
                   Side-by-side comparison of key metrics
                 </p>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={metricsBarData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                      <CartesianGrid horizontal={true} vertical={false} stroke="#e5e5e5" />
                       <XAxis type="number" axisLine={false} tickLine={false} />
                       <YAxis
                         type="category"
@@ -488,17 +441,20 @@ export default function ComparisonPage() {
                         axisLine={false}
                         tickLine={false}
                         width={100}
+                        tick={{ fill: "#000", fontSize: 10, fontFamily: "sans-serif", fontWeight: "bold" }}
                       />
                       <Tooltip
                         contentStyle={{
-                          borderRadius: "12px",
-                          border: "none",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                          borderRadius: "0px",
+                          border: "1px solid black",
+                          boxShadow: "none",
+                          fontFamily: "sans-serif"
                         }}
+                        itemStyle={{ fontWeight: "bold" }}
                       />
-                      <Legend />
-                      <Bar dataKey="Basic" fill="#ef4444" radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="Enhanced" fill="#22c55e" radius={[0, 4, 4, 0]} />
+                      <Legend wrapperStyle={{ fontFamily: 'sans-serif', fontSize: '10px', fontWeight: 'bold' }} />
+                      <Bar dataKey="Basic" fill="#dc2626" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="Enhanced" fill="#000000" radius={[0, 0, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -508,52 +464,52 @@ export default function ComparisonPage() {
             {/* Study Objectives Met */}
             <DashboardCard title="Study Objectives Achieved">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl">
+                <div className="p-6 border border-black bg-white">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">1</span>
+                    <div className="w-6 h-6 border border-black bg-black flex items-center justify-center">
+                      <span className="text-white font-bold text-xs">1</span>
                     </div>
-                    <h4 className="font-semibold text-gray-900">Cache Optimization</h4>
+                    <h4 className="font-bold text-black uppercase text-sm">Cache Optimization</h4>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">
-                    64-byte aligned memory blocks reduce cache misses by organizing data for CPU cache lines.
+                  <p className="text-sm font-mono text-gray-600 mb-4">
+                    64-byte aligned memory blocks reduce cache misses.
                   </p>
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-3xl font-black text-black tracking-tighter">
                     {data.improvements.query_speedup.toFixed(2)}x
                   </div>
-                  <p className="text-xs text-gray-500">throughput improvement</p>
+                  <p className="text-xs font-bold uppercase text-gray-400">throughput improvement</p>
                 </div>
 
-                <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-2xl">
+                <div className="p-6 border border-black bg-white">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">2</span>
+                    <div className="w-6 h-6 border border-black bg-black flex items-center justify-center">
+                      <span className="text-white font-bold text-xs">2</span>
                     </div>
-                    <h4 className="font-semibold text-gray-900">Incremental Learning</h4>
+                    <h4 className="font-bold text-black uppercase text-sm">Incremental Learning</h4>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">
-                    O(1) updates using Passive-Aggressive online learning with reservoir sampling.
+                  <p className="text-sm font-mono text-gray-600 mb-4">
+                    O(1) updates using Passive-Aggressive online learning.
                   </p>
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-3xl font-black text-black tracking-tighter">
                     {data.improvements.update_speedup.toFixed(0)}x
                   </div>
-                  <p className="text-xs text-gray-500">faster updates</p>
+                  <p className="text-xs font-bold uppercase text-gray-400">faster updates</p>
                 </div>
 
-                <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl">
+                <div className="p-6 border border-black bg-white">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center">
-                      <span className="text-white font-bold text-sm">3</span>
+                    <div className="w-6 h-6 border border-black bg-black flex items-center justify-center">
+                      <span className="text-white font-bold text-xs">3</span>
                     </div>
-                    <h4 className="font-semibold text-gray-900">Adaptive Control</h4>
+                    <h4 className="font-bold text-black uppercase text-sm">Adaptive Control</h4>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">
-                    PID controller dynamically adjusts threshold to maintain stable FPR under varying workloads.
+                  <p className="text-sm font-mono text-gray-600 mb-4">
+                    PID controller dynamically adjusts threshold.
                   </p>
-                  <div className="text-2xl font-bold text-purple-600">
+                  <div className="text-3xl font-black text-black tracking-tighter">
                     {data.improvements.fpr_stability_improvement.toFixed(1)}x
                   </div>
-                  <p className="text-xs text-gray-500">more stable FPR</p>
+                  <p className="text-xs font-bold uppercase text-gray-400">more stable FPR</p>
                 </div>
               </div>
             </DashboardCard>
@@ -562,30 +518,29 @@ export default function ComparisonPage() {
 
         {/* Initial State - No Data */}
         {!data && !isLoading && (
-          <DashboardCard className="text-center py-12">
+          <DashboardCard className="text-center py-24 bg-gray-50 border border-dashed border-gray-300">
             <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                <Activity className="w-8 h-8 text-gray-400" />
+              <div className="w-16 h-16 border-2 border-black flex items-center justify-center mx-auto mb-6 bg-white">
+                <Activity className="w-8 h-8 text-black" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-xl font-bold uppercase tracking-widest text-black mb-2">
                 Ready to Compare
               </h3>
-              <p className="text-gray-500 mb-6">
-                Click &quot;Run Comparison&quot; to see how the Enhanced Learned Bloom Filter 
-                solves the three critical problems of the basic implementation.
+              <p className="text-gray-500 mb-8 font-mono text-sm">
+                Initiate the comparison sequence to evaluate Basic vs Enhanced LBF performance.
               </p>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div className="p-3 bg-red-50 rounded-xl">
-                  <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-2" />
-                  <p className="text-gray-600">Poor Cache Locality</p>
+              <div className="grid grid-cols-3 gap-4 text-xs font-bold uppercase">
+                <div className="p-3 border border-red-200 bg-white text-red-600">
+                  <AlertTriangle className="w-4 h-4 mx-auto mb-2" />
+                  <p>Cache Misses</p>
                 </div>
-                <div className="p-3 bg-red-50 rounded-xl">
-                  <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-2" />
-                  <p className="text-gray-600">O(n) Retraining</p>
+                <div className="p-3 border border-red-200 bg-white text-red-600">
+                  <AlertTriangle className="w-4 h-4 mx-auto mb-2" />
+                  <p>Slow Retraining</p>
                 </div>
-                <div className="p-3 bg-red-50 rounded-xl">
-                  <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-2" />
-                  <p className="text-gray-600">Unstable FPR</p>
+                <div className="p-3 border border-red-200 bg-white text-red-600">
+                  <AlertTriangle className="w-4 h-4 mx-auto mb-2" />
+                  <p>Unstable FPR</p>
                 </div>
               </div>
             </div>

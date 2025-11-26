@@ -21,34 +21,33 @@ export default function DashboardPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] font-sans text-gray-900">
+    <div className="min-h-screen bg-white font-sans text-black">
       
       <main className="transition-all duration-300">
         {/* Header */}
-        <header className="h-24 px-8 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Learned Bloom Filter Simulation</h1>
+        <header className="h-24 px-8 flex items-center justify-between border-b border-black mb-8">
+          <h1 className="text-3xl font-bold uppercase tracking-tighter">Learned Bloom Filter Simulation</h1>
         </header>
 
         <div className="px-8 pb-12">
           {/* Loading Overlay */}
           {isLoading && (
-             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-               <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-300">
+             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-none">
+               <div className="flex flex-col items-center gap-6 p-12 bg-white border border-black animate-in zoom-in-95 duration-300">
                  <div className="relative w-16 h-16">
-                   <div className="absolute inset-0 border-4 border-gray-100 rounded-full" />
-                   <div className="absolute inset-0 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                   <Activity className="absolute inset-0 m-auto w-6 h-6 text-purple-600 animate-pulse" />
+                   <div className="absolute inset-0 border-4 border-gray-200" />
+                   <div className="absolute inset-0 border-4 border-black border-t-transparent animate-spin" />
+                   <Activity className="absolute inset-0 m-auto w-6 h-6 text-black animate-pulse" />
                  </div>
                  <div className="text-center">
-                   <h3 className="text-lg font-bold text-gray-900">Running Simulation</h3>
-                   <p className="text-sm text-gray-500">Training models and processing queries...</p>
+                   <h3 className="text-lg font-bold uppercase tracking-widest text-black">Processing</h3>
+                   <p className="text-sm font-mono text-gray-500 mt-2">Training models...</p>
                  </div>
                </div>
              </div>
           )}
 
-          {/* Top Metrics Row */}
-          {results && <MetricsSummary results={results} />}
+          {/* Top Metrics Row Removed */}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Left Column: Config & Summary */}
@@ -61,24 +60,6 @@ export default function DashboardPage() {
                   onConfigChange={setConfig}
                 />
               </DashboardCard>
-
-              {results && (
-                <DashboardCard title="Performance Score" className="h-auto">
-                  <div className="flex flex-col items-center justify-center py-6">
-                    <div className="relative w-48 h-24 overflow-hidden mb-4">
-                      <div className="absolute top-0 left-0 w-full h-48 rounded-full border-[16px] border-gray-100" />
-                      <div className="absolute top-0 left-0 w-full h-48 rounded-full border-[16px] border-purple-500 border-t-transparent border-r-transparent -rotate-45" />
-                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
-                        <div className="text-3xl font-bold text-gray-900">98.5</div>
-                        <div className="text-xs text-gray-400 uppercase tracking-wider">Efficiency</div>
-                      </div>
-                    </div>
-                    <p className="text-center text-gray-500 text-sm px-4">
-                      Cache-aligned filters are performing 15% better than standard implementation.
-                    </p>
-                  </div>
-                </DashboardCard>
-              )}
             </div>
 
             {/* Right Column: Charts */}
@@ -86,30 +67,25 @@ export default function DashboardPage() {
               {/* Main Chart Container */}
               <DashboardCard 
                 title="Performance Metrics" 
-                action={
-                  <button className="p-2 hover:bg-gray-50 rounded-full text-gray-400">
-                    <MoreHorizontal className="w-5 h-5" />
-                  </button>
-                }
                 className="min-h-[400px]"
               >
                 <div className="space-y-8">
                   {/* FPR Chart */}
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-4">False Positive Rate History</h3>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">False Positive Rate History</h3>
                     {results ? (
                       <FprChart results={results} />
                     ) : (
-                      <div className="h-[300px] flex items-center justify-center text-gray-400">
-                        No simulation data available
+                      <div className="h-[300px] flex items-center justify-center text-gray-400 font-mono border border-dashed border-gray-300">
+                        NO SIMULATION DATA
                       </div>
                     )}
                   </div>
 
                   {/* Secondary Metrics Row */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-8 border-t border-black">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-4">Throughput (ops/sec)</h3>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Throughput (ops/sec)</h3>
                       {results ? (
                         <MetricsComparison 
                           results={results} 
@@ -117,21 +93,35 @@ export default function DashboardPage() {
                           formatter={(val) => formatThroughput(val, { millionDecimals: 2, thousandDecimals: 1 })}
                         />
                       ) : (
-                        <div className="h-[200px] bg-gray-50 rounded-xl animate-pulse" />
+                        <div className="h-[200px] bg-gray-50 border border-gray-200" />
                       )}
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-4">Memory Usage</h3>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Memory Usage</h3>
                       {results ? (
                         <MetricsComparison 
                           results={results} 
                           metric="memoryBytes" 
-                          unit=" MB"
-                          formatter={(val) => (val / (1024 * 1024)).toFixed(2)}
+                          unit=" KB"
+                          formatter={(val) => (val / 1024).toFixed(2)}
                         />
                       ) : (
-                        <div className="h-[200px] bg-gray-50 rounded-xl animate-pulse" />
+                        <div className="h-[200px] bg-gray-50 border border-gray-200" />
+                      )}
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-4">Average Retraining Time (ms)</h3>
+                      {results ? (
+                        <MetricsComparison 
+                          results={results} 
+                          metric="creationTimeMs" 
+                          unit=" ms"
+                          formatter={(val) => val.toFixed(1)}
+                        />
+                      ) : (
+                        <div className="h-[200px] bg-gray-50 border border-gray-200" />
                       )}
                     </div>
                   </div>

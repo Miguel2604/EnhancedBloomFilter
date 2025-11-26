@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { Sidebar } from "@/components/sidebar";
 import { SimulationProvider } from "@/context/simulation-context";
 import { StreamProvider } from "@/context/stream-context";
+import { ComparisonProvider } from "@/context/comparison-context";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,16 +30,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#F8F9FC]`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white`}
       >
         <SimulationProvider>
           <StreamProvider>
-            <div className="flex min-h-screen">
-              <Sidebar />
-              <div className="flex-1 pl-20">
-                {children}
+            <ComparisonProvider>
+              <div className="flex min-h-screen">
+                <Sidebar />
+                <div className="flex-1 pl-20">
+                  {children}
+                </div>
               </div>
-            </div>
+            </ComparisonProvider>
           </StreamProvider>
         </SimulationProvider>
       </body>

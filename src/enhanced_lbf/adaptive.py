@@ -365,6 +365,37 @@ class AdaptiveLBF:
             'threshold_history_length': len(self.threshold_history)
         }
     
+    def get_memory_usage(self) -> Dict:
+        """Get memory usage breakdown."""
+        import sys
+        
+        # Base LBF memory
+        base_memory = self.base_lbf.get_memory_usage()
+        base_bytes = base_memory.get('total_bytes', 0) if isinstance(base_memory, dict) else base_memory
+        
+        # PID controller (floats and state)
+        pid_bytes = 5 * 8  # 5 float64 values
+        
+        # Count-Min Sketch table
+        cms_bytes = self.frequency_sketch.table.nbytes
+        
+        # Recent queries deque (estimate)
+        deque_bytes = len(self.recent_queries) * 64  # Approximate per-entry
+        
+        # History lists
+        history_bytes = (len(self.threshold_history) + len(self.fpr_history)) * 8
+        
+        total = base_bytes + pid_bytes + cms_bytes + deque_bytes + history_bytes
+        
+        return {
+            'base_lbf_bytes': base_bytes,
+            'pid_controller_bytes': pid_bytes,
+            'count_min_sketch_bytes': cms_bytes,
+            'monitoring_deque_bytes': deque_bytes,
+            'history_bytes': history_bytes,
+            'total_bytes': total
+        }
+    
     def __repr__(self) -> str:
         """String representation."""
         stability = self.get_stability_metrics()
