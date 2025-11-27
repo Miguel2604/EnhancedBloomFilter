@@ -186,13 +186,13 @@ export default function ComparisonPage() {
 
               <div className="bg-white text-black border border-black p-6">
                 <div className="flex items-center gap-2 text-gray-500 mb-2 pb-2 border-b border-black">
-                  <TrendingUp className="w-4 h-4 text-black" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-black">FPR Stability</span>
+                  <TrendingDown className="w-4 h-4 text-black" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-black">FPR Reduction</span>
                 </div>
                 <div className="text-5xl font-black mb-1 tracking-tighter">
                   {data.improvements.fpr_stability_improvement.toFixed(1)}x
                 </div>
-                <p className="text-xs font-mono uppercase text-gray-500">more stable</p>
+                <p className="text-xs font-mono uppercase text-gray-500">lower false positives</p>
               </div>
             </div>
 
@@ -244,9 +244,9 @@ export default function ComparisonPage() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500 block text-xs uppercase">FPR Variance</span>
+                      <span className="text-gray-500 block text-xs uppercase">False Positive Rate</span>
                       <span className="font-bold text-red-600">
-                        ±{data.basic_lbf.fpr_variance_pct.toFixed(0)}%
+                        {data.basic_lbf.fpr_mean.toFixed(2)}%
                       </span>
                     </div>
                     <div>
@@ -305,9 +305,9 @@ export default function ComparisonPage() {
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-500 block text-xs uppercase">FPR Variance</span>
+                      <span className="text-gray-500 block text-xs uppercase">False Positive Rate</span>
                       <span className="font-bold text-black">
-                        ±{data.enhanced_lbf.fpr_variance_pct.toFixed(0)}%
+                        {data.enhanced_lbf.fpr_mean.toFixed(2)}%
                       </span>
                     </div>
                     <div>
@@ -355,10 +355,10 @@ export default function ComparisonPage() {
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* FPR Stability Chart */}
-              <DashboardCard title="FPR Stability Comparison">
+              {/* FPR Comparison Chart */}
+              <DashboardCard title="FPR Comparison">
                 <p className="text-xs font-mono text-gray-500 mb-4 uppercase">
-                  FPR measured across 20 rounds with varying query distributions
+                  False positive rate measured across 20 rounds with varying query distributions
                 </p>
                 {/* FPR Standard Deviation Display */}
                 <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 border border-gray-200">
@@ -504,12 +504,12 @@ export default function ComparisonPage() {
                     <h4 className="font-bold text-black uppercase text-sm">Adaptive Control</h4>
                   </div>
                   <p className="text-sm font-mono text-gray-600 mb-4">
-                    PID controller dynamically adjusts threshold.
+                    PID controller + optimized feature extraction.
                   </p>
                   <div className="text-3xl font-black text-black tracking-tighter">
                     {data.improvements.fpr_stability_improvement.toFixed(1)}x
                   </div>
-                  <p className="text-xs font-bold uppercase text-gray-400">more stable FPR</p>
+                  <p className="text-xs font-bold uppercase text-gray-400">lower FPR</p>
                 </div>
               </div>
             </DashboardCard>

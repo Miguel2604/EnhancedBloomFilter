@@ -114,15 +114,13 @@ class CombinedEnhancedLBF:
         )
         self._backup_items: List[Any] = []
         
-        # Add initial positive set: always to primary; to backup only if model routes below threshold
+        # Add initial positive set to both filters
+        # Primary: stores ALL positives (authoritative membership)
+        # Backup: starts with all positives so adaptive threshold shifts never drop items
         if initial_positive_set:
             for item in initial_positive_set:
                 self.primary_filter.add(item)
-                # Evaluate current model BEFORE any updates (already trained in _init_model)
-                feats = self._extract_url_features(item)
-                prob = self._predict_proba(feats)
-                if prob < self.threshold:
-                    self._add_to_backup(item)
+                self._add_to_backup(item)
         
         if verbose:
             self._print_config()
@@ -181,14 +179,18 @@ class CombinedEnhancedLBF:
                 Kd=0.1
             )
             
-            # Monitoring
+            # Monitoring - track predictions without requiring ground_truth
             self.recent_queries = deque(maxlen=self.monitoring_window)
+            self.recent_predictions = deque(maxlen=self.monitoring_window)  # Track model confidence
+            self.recent_results = deque(maxlen=self.monitoring_window)  # Track query results
             self.threshold_history = [self.threshold]
             self.fpr_history = []
         else:
             self.threshold = 0.7  # Higher fixed threshold
             self.pid = None
             self.recent_queries = None
+            self.recent_predictions = None
+            self.recent_results = None
     
     def _calibrate_initial_threshold(self,
                                      positive_set: Optional[List[Any]],
@@ -247,13 +249,16 @@ class CombinedEnhancedLBF:
         """Add item with proper training."""
         self.total_updates += 1
         
-        # For positives, always add to primary; add to backup only if model routes below threshold BEFORE update
+        # For positives, always add to primary. Backup policy depends on adaptive mode.
         features = self._extract_url_features(item)
         pre_update_prob = self._predict_proba(features)
         
         if label == 1:
             self.primary_filter.add(item)
-            if pre_update_prob < self.threshold:
+            if self.adaptive_enabled:
+                # Threshold may move later; keep backup in sync to avoid false negatives.
+                self._add_to_backup(item)
+            elif pre_update_prob < self.threshold:
                 self._add_to_backup(item)
         
         # Incremental learning
@@ -289,52 +294,46 @@ class CombinedEnhancedLBF:
         score = self.model.predict(features)
         probability = 1 / (1 + np.exp(-score))
         
-        # High model confidence: check primary filter to confirm membership.
-        # The model is used for ROUTING, not for membership confirmation.
-        # We must still verify with the actual Bloom filter to maintain
-        # proper FPR guarantees.
+        # The model is used for ROUTING to reduce FPR:
+        # - High confidence (prob >= threshold): check primary filter (might be FP)
+        # - Low confidence (prob < threshold): check backup only (backup has ALL positives)
         if probability >= self.threshold:
             # Model thinks it's likely positive - check primary filter
-            if self.primary_filter.query(item):
-                result = True
-            else:
-                # Model confident but not in primary - check backup
-                result = self.positive_backup.query(item)
+            # FPR in this path = primary filter's FPR
+            result = self.primary_filter.query(item)
         else:
-            # Low model confidence: check both filters to avoid false negatives
-            if self.primary_filter.query(item):
-                result = True
-            else:
-                # Low confidence: rely on backup filter (and cache) to recover
-                # positives the model routes below the threshold.
-                if self.cache_opt_enabled and self.cache_blocks is not None:
-                    block = self._get_cache_block(item)
-                    if block.check_backup_bit(item):
-                        # Bit is set: It MIGHT be in backup.
-                        # We must check the full backup filter to be sure.
-                        # This is a "partial hit" or "cache says maybe".
-                        # In terms of avoiding main memory (backup filter), we failed.
-                        self.cache_misses += 1
-                        result = self.positive_backup.query(item)
-                    else:
-                        # Bit is NOT set: It is DEFINITELY NOT in backup.
-                        # We resolved the query using only the cache block.
-                        self.cache_hits += 1
-                        result = False
-                else:
+            # Model thinks it's likely negative - only check backup/cache path to keep FPR low
+            # Adaptive mode keeps backup fully populated, so we can avoid primary lookups
+            if self.cache_opt_enabled and self.cache_blocks is not None:
+                block = self._get_cache_block(item)
+                if block.check_backup_bit(item):
+                    # Bit is set: might be in backup, must check full filter
+                    self.cache_misses += 1
                     result = self.positive_backup.query(item)
+                else:
+                    # Bit NOT set: definitely not routed to backup
+                    self.cache_hits += 1
+                    result = False
+            else:
+                result = self.positive_backup.query(item)
         
-        # Track for adaptive control
-        if self.adaptive_enabled and ground_truth is not None:
-            self.recent_queries.append({
-                'result': result,
-                'ground_truth': ground_truth,
-                'item': item
-            })
+        # Track for adaptive control - works with or without ground_truth
+        if self.adaptive_enabled:
+            # Always track predictions for automatic FPR estimation
+            self.recent_predictions.append(probability)
+            self.recent_results.append(result)
             
-            # Periodically adjust threshold
+            # If ground_truth provided, use it for precise FPR calculation
+            if ground_truth is not None:
+                self.recent_queries.append({
+                    'result': result,
+                    'ground_truth': ground_truth,
+                    'item': item
+                })
+            
+            # Periodically adjust threshold (every 100 queries)
             if self.total_queries % 100 == 0:
-                self._adjust_threshold()
+                self._adjust_threshold(has_ground_truth=(ground_truth is not None))
         
         return result
     
@@ -407,18 +406,55 @@ class CombinedEnhancedLBF:
 
         return features
     
-    def _adjust_threshold(self):
-        """Adjust threshold using PID control."""
-        if len(self.recent_queries) < 100:
-            return
+    def _adjust_threshold(self, has_ground_truth: bool = False):
+        """Adjust threshold using PID control.
         
-        # Calculate recent FPR
-        negatives = [q for q in self.recent_queries if not q['ground_truth']]
-        if len(negatives) == 0:
-            return
+        Works in two modes:
+        1. With ground_truth: Uses actual FPR from labeled queries (precise)
+        2. Without ground_truth: Estimates FPR from prediction patterns (automatic)
+        """
+        recent_fpr = None
         
-        false_positives = sum(1 for q in negatives if q['result'])
-        recent_fpr = false_positives / len(negatives)
+        if has_ground_truth and len(self.recent_queries) >= 100:
+            # Mode 1: Use actual ground truth for precise FPR
+            negatives = [q for q in self.recent_queries if not q['ground_truth']]
+            if len(negatives) > 0:
+                false_positives = sum(1 for q in negatives if q['result'])
+                recent_fpr = false_positives / len(negatives)
+        
+        if recent_fpr is None and len(self.recent_results) >= 100:
+            # Mode 2: Estimate FPR from prediction patterns
+            # Key insight: In typical BF usage, most queries are for non-members.
+            # If the positive rate is much higher than expected, FPR is likely high.
+            # 
+            # We estimate FPR using:
+            # 1. Positive prediction rate (high rate suggests high FPR)
+            # 2. Model confidence distribution (uncertain predictions are risky)
+            
+            recent_results_list = list(self.recent_results)
+            recent_preds_list = list(self.recent_predictions)
+            
+            # Calculate positive rate
+            positive_rate = sum(recent_results_list) / len(recent_results_list)
+            
+            # Calculate average confidence for positive predictions
+            # Low confidence positives are more likely false positives
+            positive_confidences = [p for p, r in zip(recent_preds_list, recent_results_list) if r]
+            avg_positive_confidence = np.mean(positive_confidences) if positive_confidences else 1.0
+            
+            # Estimate FPR: Higher positive rate + lower confidence = higher estimated FPR
+            # Assume ~10% of queries are for actual members in typical workload
+            expected_positive_rate = 0.10
+            excess_positive_rate = max(0, positive_rate - expected_positive_rate)
+            
+            # Weight by inverse confidence (uncertain predictions more likely FPs)
+            confidence_factor = 1.0 - (avg_positive_confidence - self.threshold) / (1.0 - self.threshold + 0.01)
+            confidence_factor = np.clip(confidence_factor, 0.5, 1.5)
+            
+            recent_fpr = excess_positive_rate * confidence_factor
+        
+        if recent_fpr is None:
+            return
         
         # PID adjustment
         adjustment = self.pid.update(recent_fpr)

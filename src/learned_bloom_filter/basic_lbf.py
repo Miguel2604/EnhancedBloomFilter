@@ -67,6 +67,16 @@ class BasicLearnedBloomFilter:
         # Feature extraction setup
         self.scaler = StandardScaler()
         
+        # Primary bloom filter stores ALL positive items for verification
+        # The model is used for routing optimization, not final decisions
+        self.primary_filter = StandardBloomFilter(
+            expected_elements=len(positive_set),
+            false_positive_rate=target_fpr,
+            verbose=False
+        )
+        for item in positive_set:
+            self.primary_filter.add(item)
+        
         # Train the ML model
         self._train_model()
         
@@ -82,7 +92,11 @@ class BasicLearnedBloomFilter:
     
     def _extract_features(self, item: Any) -> np.ndarray:
         """
-        Extract numerical features from an item.
+        Extract numerical features from an item using hash-based approach.
+        
+        Uses normalized hash values to avoid overfitting on string patterns.
+        This ensures the model learns from the actual item identity (via hashes)
+        rather than superficial patterns like prefixes or character positions.
         
         Args:
             item: Item to extract features from
@@ -90,35 +104,35 @@ class BasicLearnedBloomFilter:
         Returns:
             Feature vector as numpy array
         """
-        # Convert to string for consistent hashing
         item_str = str(item)
-        
-        # Generate multiple hash values as features
         features = []
         
-        # Feature 1: Length
-        features.append(len(item_str))
+        # Feature 0: Normalized length
+        features.append(len(item_str) / 100.0)
         
-        # Features 2-5: Hash values from different functions
+        # Features 1-8: Multiple normalized hash values as primary features
+        # These capture item identity without leaking string patterns
         hash_funcs = [hashlib.md5, hashlib.sha1, hashlib.sha256, hashlib.sha512]
         for hash_func in hash_funcs:
-            hash_val = int(hash_func(item_str.encode()).hexdigest()[:8], 16)
-            features.append(hash_val)
+            hash_bytes = hash_func(item_str.encode()).digest()
+            # Extract two normalized values from each hash
+            val1 = int.from_bytes(hash_bytes[:4], 'big') / (2**32)
+            val2 = int.from_bytes(hash_bytes[4:8], 'big') / (2**32)
+            features.append(val1)
+            features.append(val2)
         
-        # Features 6-10: Character statistics
-        features.append(sum(c.isdigit() for c in item_str))  # Digit count
-        features.append(sum(c.isalpha() for c in item_str))  # Letter count
-        features.append(sum(c.isspace() for c in item_str))  # Space count
-        features.append(ord(item_str[0]) if item_str else 0)  # First char
-        features.append(ord(item_str[-1]) if item_str else 0)  # Last char
+        # Features 9-11: Normalized character category ratios (not counts)
+        length = max(len(item_str), 1)
+        features.append(sum(c.isdigit() for c in item_str) / length)
+        features.append(sum(c.isalpha() for c in item_str) / length)
+        features.append(sum(not c.isalnum() for c in item_str) / length)
         
-        # Features 11-15: Statistical properties
-        char_codes = [ord(c) for c in item_str]
-        features.append(np.mean(char_codes) if char_codes else 0)
-        features.append(np.std(char_codes) if char_codes else 0)
-        features.append(min(char_codes) if char_codes else 0)
-        features.append(max(char_codes) if char_codes else 0)
-        features.append(len(set(item_str)))  # Unique chars
+        # Features 12-14: Hash-based character statistics (normalized)
+        # Avoid raw char codes which leak positional information
+        char_codes = [ord(c) for c in item_str] if item_str else [0]
+        features.append(np.mean(char_codes) / 256.0)
+        features.append(np.std(char_codes) / 128.0 if len(char_codes) > 1 else 0)
+        features.append(len(set(item_str)) / length)  # Unique char ratio
         
         return np.array(features, dtype=np.float32)
     
@@ -236,11 +250,14 @@ class BasicLearnedBloomFilter:
         """
         Check if an item might be in the set.
         
+        The ML model is used for ROUTING optimization, not final decisions.
+        All positive predictions must be verified against the primary bloom filter.
+        
         Args:
             item: Item to check
             
         Returns:
-            True if item might be in set (possible false positive)
+            True if item might be in set (possible false positive from bloom filter)
             False if item is definitely not in set (no false negatives)
         """
         self.query_count += 1
@@ -252,12 +269,14 @@ class BasicLearnedBloomFilter:
         # Get ML model prediction
         probability = self.model.predict_proba(features_scaled)[0, 1]
         
-        # Check against threshold
+        # Check against threshold - model is used for routing
         if probability >= self.threshold:
             self.positive_predictions += 1
-            return True
+            # IMPORTANT: Verify against primary bloom filter
+            # Model predictions alone are not reliable for unseen data
+            return self.primary_filter.query(item)
         
-        # If model says no, check backup filter
+        # If model says no, check backup filter for false negatives
         return self.backup_filter.query(item)
     
     def __contains__(self, item: Any) -> bool:
@@ -282,12 +301,14 @@ class BasicLearnedBloomFilter:
         # Get batch predictions
         probabilities = self.model.predict_proba(features_scaled)[:, 1]
         
-        # Check each item
+        # Check each item - verify model predictions against bloom filters
         results = []
         for i, (item, prob) in enumerate(zip(items, probabilities)):
             if prob >= self.threshold:
-                results.append(True)
+                # Model says positive - verify against primary filter
+                results.append(self.primary_filter.query(item))
             else:
+                # Model says negative - check backup filter
                 results.append(self.backup_filter.query(item))
         
         self.query_count += len(items)
@@ -316,11 +337,15 @@ class BasicLearnedBloomFilter:
         if hasattr(self.scaler, 'scale_'):
             scaler_size += self.scaler.scale_.nbytes
         
+        primary_filter_bytes = self.primary_filter.get_memory_usage()
+        backup_filter_bytes = self.backup_filter.get_memory_usage()
+        
         return {
             'model_bytes': model_size,
             'scaler_bytes': scaler_size,
-            'backup_filter_bytes': self.backup_filter.get_memory_usage(),
-            'total_bytes': model_size + scaler_size + self.backup_filter.get_memory_usage()
+            'primary_filter_bytes': primary_filter_bytes,
+            'backup_filter_bytes': backup_filter_bytes,
+            'total_bytes': model_size + scaler_size + primary_filter_bytes + backup_filter_bytes
         }
     
     def estimate_fpr(self, test_negatives: List[Any]) -> float:
